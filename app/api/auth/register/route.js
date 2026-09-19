@@ -1,7 +1,7 @@
 import { hashPassword } from "@/lib/auth/password";
 import { clientKey, rateLimit } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
-import { createUser, findUser } from "@/lib/auth/store";
+import { createUser, findUser, isStorageError } from "@/lib/auth/store";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -44,11 +44,18 @@ export async function POST(request) {
     lastLoginAt: null,
   };
 
-  const result = await createUser(user);
-  if (!result.ok) {
-    return Response.json({ error: "email_taken" }, { status: 409 });
-  }
+  try {
+    const result = await createUser(user);
+    if (!result.ok) {
+      return Response.json({ error: "email_taken" }, { status: 409 });
+    }
 
-  await createSession(email);
-  return Response.json({ user: { email, name: user.name } }, { status: 201 });
+    await createSession(email);
+    return Response.json({ user: { email, name: user.name } }, { status: 201 });
+  } catch (err) {
+    if (isStorageError(err)) {
+      return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    }
+    throw err;
+  }
 }

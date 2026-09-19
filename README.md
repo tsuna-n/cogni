@@ -34,3 +34,11 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Auth & deployment notes
+
+Accounts are stored in `data/users.json` (scrypt-hashed passwords) and sessions are HMAC-signed cookies.
+
+- **Single server / VPS / Docker** (filesystem writable): works out of the box. Set `SESSION_SECRET` env var so sessions survive restarts.
+- **Serverless (Vercel, Lambda, etc.)**: the filesystem is read-only and ephemeral — account registration will return `storage_unavailable`. You must either deploy on a writable server or replace `lib/auth/store.js` with a real database (SQLite on a persistent volume, Postgres, Upstash Redis, etc.).
+- **Multiple instances**: always set the `SESSION_SECRET` environment variable (e.g. `openssl rand -base64 32`) so session cookies verify on every instance.

@@ -12,6 +12,8 @@ const AUTH_ERRORS = {
   missing_credentials: "กรุณากรอกอีเมลและรหัสผ่าน / Enter email and password",
   rate_limited: "พยายามหลายครั้งเกินไป กรุณารอสักครู่ / Too many attempts, please wait a moment",
   invalid_body: "ข้อมูลไม่ถูกต้อง / Invalid request",
+  storage_unavailable:
+    "เซิร์ฟเวอร์บันทึกบัญชีไม่ได้ (พื้นที่จัดเก็บเป็นแบบอ่านอย่างเดียว) — ต้องตั้งค่าฐานข้อมูลหรือ deploy บนเซิร์ฟเวอร์ที่เขียนไฟล์ได้ / Server cannot store accounts (read-only filesystem) — configure a database or deploy on a writable server",
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

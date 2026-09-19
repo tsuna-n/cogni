@@ -1,7 +1,7 @@
 import { verifyPassword } from "@/lib/auth/password";
 import { clientKey, rateLimit } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
-import { findUser, recordLogin } from "@/lib/auth/store";
+import { findUser, isStorageError, recordLogin } from "@/lib/auth/store";
 
 export async function POST(request) {
   const limit = rateLimit(clientKey(request, "login"), 10, 60_000);
@@ -28,7 +28,11 @@ export async function POST(request) {
     return Response.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
-  await recordLogin(email);
+  try {
+    await recordLogin(email);
+  } catch (err) {
+    if (!isStorageError(err)) throw err;
+  }
   await createSession(email);
   return Response.json({ user: { email, name: user.name || null } });
 }
