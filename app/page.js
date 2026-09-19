@@ -806,19 +806,21 @@ export default function Home() {
 
     const secureOK = location.hostname === "localhost" || location.protocol === "https:";
     const chromeOK = /Chrome\//.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent);
+    const linuxDesktop = /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+    const webBluetoothUnavailableMessage = linuxDesktop
+      ? "Chrome บน Linux ยังไม่ได้เปิด Web Bluetooth — เปิด chrome://flags/#enable-web-bluetooth และ chrome://flags/#enable-web-bluetooth-new-permissions-backend เป็น Enabled จากนั้นกด Relaunch แล้วรีเฟรชหน้านี้"
+      : "Web Bluetooth ไม่พร้อมใช้งาน — ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์/Android และเปิดเว็บผ่าน HTTPS หรือ localhost (Chrome บน iPhone และ browser ในแอป LINE/Facebook ไม่รองรับ)";
     if ($("chromeStatus")) {
       $("chromeStatus").textContent = secureOK ? (chromeOK ? "✓ Chrome + localhost พร้อมใช้งาน" : "✓ localhost พร้อมใช้งาน") : "⚠ เปิดผิดวิธี";
       $("chromeStatus").style.background = secureOK ? "#123c2b" : "#4a1d22";
     }
     if (secureOK && typeof navigator.bluetooth === "undefined" && $("chromeStatus")) {
-      $("chromeStatus").textContent = "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
+      $("chromeStatus").textContent = linuxDesktop ? "⚠ ต้องเปิด Web Bluetooth ใน Chrome Linux" : "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
       $("chromeStatus").style.background = "#4a1d22";
     }
 
     let museModulePromise = null;
     let museModuleReady = null;
-    let selectedMuseDevice = null;
-    let selectedMuseGatt = null;
     const MUSE_SERVICE = "0000fe8d-0000-1000-8000-00805f9b34fb";
 
     function setMuseStatus(message, isError = false) {
@@ -855,87 +857,23 @@ export default function Home() {
         return [];
       }
     }
-    function openMuseModal() {
-      const m = getEl("museModal");
-      if (!m) return;
-      m.style.display = "flex";
-      renderMuseDevices();
-    }
-    function closeMuseModal() {
-      const m = getEl("museModal");
-      if (m) m.style.display = "none";
-    }
-    async function renderMuseDevices() {
-      const box = getEl("museModalList");
-      if (!box) return;
-      const devices = await listKnownMuseDevices();
-      if (!devices.length) {
-        box.innerHTML =
-          '<div class="muted">ยังไม่มีอุปกรณ์ที่บันทึกไว้ — กด "ค้นหาอุปกรณ์ใหม่" เพื่อเลือกจากหน้าต่าง Bluetooth / No saved devices — press "Scan new device" to pick from the Chrome Bluetooth window</div>';
-        return;
-      }
-      box.innerHTML = "";
-      devices.forEach((d) => {
-        const row = document.createElement("div");
-        row.style.cssText =
-          "display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #17314a;border-radius:10px;padding:10px 14px;flex-wrap:wrap;";
-        const left = document.createElement("span");
-        left.style.cssText = "display:flex;flex-direction:column;gap:2px;";
-        const name = document.createElement("b");
-        name.textContent = d.name || "Muse device";
-        const state = document.createElement("span");
-        state.className = "muted";
-        state.style.fontSize = "12px";
-        state.textContent = d.gatt?.connected ? "● เชื่อมต่ออยู่ / connected" : "○ ไม่ได้เชื่อมต่อ / not connected";
-        left.append(name, state);
-        const btns = document.createElement("span");
-        btns.style.cssText = "display:flex;gap:6px;";
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = d.gatt?.connected ? "ใช้อุปกรณ์นี้ / Use" : "เชื่อมต่อ / Connect";
-        btn.addEventListener("click", () => {
-          closeMuseModal();
-          connectMuseDevice(d, false);
-        });
-        const forget = document.createElement("button");
-        forget.type = "button";
-        forget.className = "secondary";
-        forget.textContent = "ลบ / Forget";
-        forget.addEventListener("click", async () => {
-          try {
-            await d.forget();
-          } catch (e) {}
-          renderMuseDevices();
-        });
-        btns.append(btn, forget);
-        row.append(left, btns);
-        box.appendChild(row);
-      });
-    }
     async function loadMuseDriver() {
       if (museModuleReady) return museModuleReady;
       if (!museModulePromise) {
-        museModulePromise = new Promise((resolve, reject) => {
-          const onReady = () => {
-            cleanup();
-            resolve(window.__museModule);
-          };
-          const onError = () => {
-            cleanup();
-            reject(new Error(window.__museModuleError || "Failed to load Muse driver from CDN"));
-          };
-          const cleanup = () => {
-            window.removeEventListener("muse-module-ready", onReady);
-            window.removeEventListener("muse-module-error", onError);
-          };
-          window.addEventListener("muse-module-ready", onReady, { once: true });
-          window.addEventListener("muse-module-error", onError, { once: true });
-          const s = document.createElement("script");
-          s.type = "module";
-          s.textContent =
-            'try { const m = await import("https://cdn.jsdelivr.net/npm/muse-jsx@0.3.1/+esm"); window.__museModule = m; window.dispatchEvent(new Event("muse-module-ready")); } catch (e) { window.__museModuleError = (e && e.message) || String(e); window.dispatchEvent(new Event("muse-module-error")); }';
-          document.head.appendChild(s);
-        });
+        // Bundle the driver with the application. Loading it from a third-party
+        // CDN made the Connect button permanently unusable whenever that CDN
+        // was blocked or briefly offline.
+        museModulePromise = import("muse-jsx")
+          .then((module) => {
+            if (typeof module.MuseClient !== "function") throw new Error("MuseClient is unavailable");
+            museModuleReady = module;
+            return module;
+          })
+          .catch((error) => {
+            // A transient chunk/load failure must be retryable on the next click.
+            museModulePromise = null;
+            throw error;
+          });
       }
       return museModulePromise;
     }
@@ -949,7 +887,9 @@ export default function Home() {
         b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
         setMuseStatus("Ready / พร้อมเชื่อมต่อ");
       } catch (e) {
-        setMuseStatus("Muse driver load failed: " + e.message, true);
+        b.disabled = false;
+        b.textContent = "Retry Muse setup / ลองเตรียมใหม่";
+        setMuseStatus("Muse driver load failed: " + e.message + " — กดปุ่มเพื่อลองใหม่", true);
       }
     }
     function subscribeEeg() {
@@ -1001,6 +941,7 @@ export default function Home() {
         if (!museModuleReady) museModuleReady = await loadMuseDriver();
         museClient = new museModuleReady.MuseClient();
         const gatt = device.gatt;
+        if (!gatt) throw new Error("อุปกรณ์นี้ไม่มี Bluetooth GATT / Device has no Bluetooth GATT server");
         if (!gatt.connected) await gatt.connect();
         await museClient.connect(gatt);
         try {
@@ -1024,7 +965,6 @@ export default function Home() {
         getEl("disconnectMuseBtn").disabled = false;
         getEl("stopBaselineBtn").disabled = true;
         b.textContent = label + " Connected / เชื่อมต่อแล้ว";
-        renderMuseDevices();
       } catch (err) {
         museConnected = false;
         setMuseConnected(false);
@@ -1034,6 +974,10 @@ export default function Home() {
           m = err?.message || String(err);
         if (quiet) setMuseStatus("Auto-reconnect ไม่สำเร็จ (" + (device?.name || "Muse") + " อาจปิดอยู่) — กด Connect หรือเลือกจากรายการด้านบน", true);
         else if (n === "NotFoundError") setMuseStatus("ไม่พบอุปกรณ์ " + label + " กรุณาเปิดเครื่องแล้วลองใหม่", true);
+        else if (n === "NetworkError")
+          setMuseStatus("เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse 2 แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry", true);
+        else if (n === "SecurityError" || n === "NotAllowedError")
+          setMuseStatus("เบราว์เซอร์ไม่อนุญาต Bluetooth — เปิดเว็บผ่าน HTTPS/localhost และอนุญาตสิทธิ์ Bluetooth แล้วลองใหม่", true);
         else setMuseStatus("Muse connection error: " + n + " — " + m, true);
         try {
           if (eegSub) eegSub.unsubscribe();
@@ -1043,7 +987,6 @@ export default function Home() {
           if (museClient) museClient.disconnect();
         } catch (e) {}
         museClient = null;
-        renderMuseDevices();
       }
     }
     function onMuseDisconnected() {
@@ -1070,7 +1013,6 @@ export default function Home() {
       b.disabled = false;
       b.textContent = "Reconnect Muse / เชื่อมต่อใหม่";
       setMuseStatus("อุปกรณ์ตัดการเชื่อมต่อ — กด Reconnect หรือเลือกจากรายการด้านบน", true);
-      renderMuseDevices();
     }
     async function connectMuse() {
       resetStages();
@@ -1079,36 +1021,29 @@ export default function Home() {
         return;
       }
       if (!navigator.bluetooth) {
-        setMuseStatus(
-          "Web Bluetooth ไม่พร้อมใช้งาน — 1) ต้องเป็น Google Chrome จริง (ไม่ใช่ Chrome บน iPhone หรือ browser ในแอป LINE/Facebook) 2) เปิด chrome://flags/#enable-web-bluetooth เป็น Enabled แล้วกด Relaunch 3) รีเฟรชหน้านี้",
-          true
-        );
+        setMuseStatus(webBluetoothUnavailableMessage, true);
         return;
       }
-      setMuseStatus("เลือกอุปกรณ์ Bluetooth ที่ต้องการเชื่อมต่อ / Pick a Bluetooth device");
-      openMuseModal();
-    }
-    async function scanNewMuseDevice() {
-      const b = getEl("museScanBtn");
+      const b = getEl("connectMuseBtn");
       b.disabled = true;
-      b.textContent = "กำลังเปิดหน้าต่าง Bluetooth… / Opening…";
+      b.textContent = "Select Muse-xxxx… / เลือก Muse…";
       setMuseStatus("1/4 เลือกอุปกรณ์ Muse-xxxx ในหน้าต่าง Bluetooth");
       let device = null;
       try {
         device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: [MUSE_SERVICE], namePrefix: "Muse" }],
+          // Some Muse firmware does not include the primary service UUID in
+          // every advertising packet. Filtering by name still restricts the
+          // chooser to Muse devices; optionalServices grants GATT access.
+          filters: [{ namePrefix: "Muse" }],
           optionalServices: [MUSE_SERVICE],
         });
       } catch (err) {
         b.disabled = false;
-        b.textContent = "🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device";
+        b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
         if (err?.name === "NotFoundError") setMuseStatus("ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse 2 กรุณากด Connect แล้วเลือก Muse-xxxx", true);
         else setMuseStatus("Device selection error: " + (err?.name || "Error") + " — " + (err?.message || err), true);
         return;
       }
-      b.disabled = false;
-      b.textContent = "🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device";
-      closeMuseModal();
       await connectMuseDevice(device);
     }
     async function disconnectMuse() {
@@ -1128,8 +1063,6 @@ export default function Home() {
         if (museClient) museClient.disconnect();
       } catch (e) {}
       museClient = null;
-      selectedMuseGatt = null;
-      selectedMuseDevice = null;
       museConnected = false;
       const b = getEl("connectMuseBtn");
       b.disabled = false;
@@ -1138,7 +1071,6 @@ export default function Home() {
       getEl("baselineBtn").disabled = true;
       getEl("stopBaselineBtn").disabled = true;
       resetStages();
-      renderMuseDevices();
       setMuseStatus("Not connected / ยังไม่เชื่อมต่อ");
     }
     function startBaseline() {
@@ -1213,7 +1145,6 @@ export default function Home() {
     }
 
     prepareMuse();
-    renderMuseDevices();
     (async () => {
       const devices = await listKnownMuseDevices();
       if (!devices.length) return;
@@ -1227,15 +1158,15 @@ export default function Home() {
       await connectMuseDevice(target, true);
     })();
 
-    getEl("connectMuseBtn").addEventListener("click", connectMuse);
-    getEl("disconnectMuseBtn").addEventListener("click", disconnectMuse);
-    getEl("museScanBtn").addEventListener("click", scanNewMuseDevice);
-    getEl("museModalClose").addEventListener("click", closeMuseModal);
-    getEl("museModal").addEventListener("click", (e) => {
-      if (e.target.id === "museModal") closeMuseModal();
-    });
-    getEl("baselineBtn").addEventListener("click", startBaseline);
-    getEl("stopBaselineBtn").addEventListener("click", () => stopBaseline(false));
+    const connectMuseBtn = getEl("connectMuseBtn");
+    const disconnectMuseBtn = getEl("disconnectMuseBtn");
+    const baselineBtn = getEl("baselineBtn");
+    const stopBaselineBtn = getEl("stopBaselineBtn");
+    const onStopBaselineClick = () => stopBaseline(false);
+    connectMuseBtn.addEventListener("click", connectMuse);
+    disconnectMuseBtn.addEventListener("click", disconnectMuse);
+    baselineBtn.addEventListener("click", startBaseline);
+    stopBaselineBtn.addEventListener("click", onStopBaselineClick);
 
     /* ---------- Section navigation ---------- */
     function showSection(id) {
@@ -1303,8 +1234,13 @@ export default function Home() {
         if (eegSub) eegSub.unsubscribe();
       } catch (e) {}
       try {
+        museManualDisconnect = true;
         if (museClient) museClient.disconnect();
       } catch (e) {}
+      connectMuseBtn.removeEventListener("click", connectMuse);
+      disconnectMuseBtn.removeEventListener("click", disconnectMuse);
+      baselineBtn.removeEventListener("click", startBaseline);
+      stopBaselineBtn.removeEventListener("click", onStopBaselineClick);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
       if (installBtn) installBtn.removeEventListener("click", onInstallClick);
@@ -1558,36 +1494,6 @@ export default function Home() {
                   </button>
                 </div>
                 <div id="btHelp" className="notice" style={{ display: "none" }}></div>
-                <div
-                  id="museModal"
-                  style={{
-                    display: "none",
-                    position: "fixed",
-                    inset: 0,
-                    background: "rgba(2,10,20,.75)",
-                    zIndex: 1000,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "16px",
-                  }}
-                >
-                  <div className="card" style={{ width: "100%", maxWidth: "480px", maxHeight: "80vh", overflow: "auto" }}>
-                    <div className="hero">
-                      <h3 style={{ marginBottom: "4px" }}>เลือกอุปกรณ์ Bluetooth / Select Bluetooth device</h3>
-                      <button id="museModalClose" className="secondary" type="button">
-                        ✕ ปิด / Close
-                      </button>
-                    </div>
-                    <div id="museModalList" style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0" }}></div>
-                    <button id="museScanBtn" type="button" style={{ width: "100%" }}>
-                      🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device
-                    </button>
-                    <p className="muted" style={{ marginTop: "10px", fontSize: "12px" }}>
-                      อุปกรณ์ Muse รอบตัวจะปรากฏในหน้าต่าง Bluetooth ของ Chrome เมื่อกดค้นหาอุปกรณ์ใหม่ / Nearby Muse devices appear in the
-                      Chrome Bluetooth window when you scan for a new device.
-                    </p>
-                  </div>
-                </div>
                 <div id="museGattStages" style={{ display: "flex", flexWrap: "wrap", gap: "10px", margin: "10px 0", fontSize: "12px" }}>
                   <span data-stage="found" data-label="Muse Found" style={{ opacity: ".5" }}>
                     ○ Muse Found
@@ -1603,7 +1509,7 @@ export default function Home() {
                   </span>
                 </div>
                 <div className="muted" style={{ marginTop: "8px" }}>
-                  เปิด Muse 2 → กด Connect Muse 2 → เลือก <b>Muse-xxxx</b> จากหน้าต่าง Bluetooth หรือกดจากรายการอุปกรณ์ที่เคยเชื่อมต่อด้านบน → เมื่อขึ้น “Connected + EEG streaming” จึงเริ่ม Baseline 30 วินาที
+                  เปิด Muse 2 → กด Connect Muse 2 → เลือก <b>Muse-xxxx</b> จากหน้าต่าง Bluetooth ที่เด้งขึ้นมา → เมื่อขึ้น “Connected + EEG streaming” จึงเริ่ม Baseline 30 วินาที
                 </div>
 
                 <div id="installBox" className="notice" style={{ display: "none" }}>
