@@ -810,6 +810,10 @@ export default function Home() {
       $("chromeStatus").textContent = secureOK ? (chromeOK ? "✓ Chrome + localhost พร้อมใช้งาน" : "✓ localhost พร้อมใช้งาน") : "⚠ เปิดผิดวิธี";
       $("chromeStatus").style.background = secureOK ? "#123c2b" : "#4a1d22";
     }
+    if (secureOK && typeof navigator.bluetooth === "undefined" && $("chromeStatus")) {
+      $("chromeStatus").textContent = "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
+      $("chromeStatus").style.background = "#4a1d22";
+    }
 
     let museModulePromise = null;
     let museModuleReady = null;
@@ -851,37 +855,61 @@ export default function Home() {
         return [];
       }
     }
+    function openMuseModal() {
+      const m = getEl("museModal");
+      if (!m) return;
+      m.style.display = "flex";
+      renderMuseDevices();
+    }
+    function closeMuseModal() {
+      const m = getEl("museModal");
+      if (m) m.style.display = "none";
+    }
     async function renderMuseDevices() {
-      const box = getEl("museDeviceList");
+      const box = getEl("museModalList");
       if (!box) return;
       const devices = await listKnownMuseDevices();
       if (!devices.length) {
         box.innerHTML =
-          '<span class="muted">ยังไม่มีอุปกรณ์ที่บันทึกไว้ — กด Connect เพื่อเลือกอุปกรณ์ / No saved devices — press Connect to pick one</span>';
+          '<div class="muted">ยังไม่มีอุปกรณ์ที่บันทึกไว้ — กด "ค้นหาอุปกรณ์ใหม่" เพื่อเลือกจากหน้าต่าง Bluetooth / No saved devices — press "Scan new device" to pick from the Chrome Bluetooth window</div>';
         return;
       }
       box.innerHTML = "";
       devices.forEach((d) => {
-        const wrap = document.createElement("span");
-        wrap.style.cssText = "display:inline-flex;gap:6px;align-items:center;";
+        const row = document.createElement("div");
+        row.style.cssText =
+          "display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #17314a;border-radius:10px;padding:10px 14px;flex-wrap:wrap;";
+        const left = document.createElement("span");
+        left.style.cssText = "display:flex;flex-direction:column;gap:2px;";
+        const name = document.createElement("b");
+        name.textContent = d.name || "Muse device";
+        const state = document.createElement("span");
+        state.className = "muted";
+        state.style.fontSize = "12px";
+        state.textContent = d.gatt?.connected ? "● เชื่อมต่ออยู่ / connected" : "○ ไม่ได้เชื่อมต่อ / not connected";
+        left.append(name, state);
+        const btns = document.createElement("span");
+        btns.style.cssText = "display:flex;gap:6px;";
         const btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "secondary";
-        btn.textContent = "🔗 " + (d.name || "Muse device");
-        btn.addEventListener("click", () => connectMuseDevice(d, false));
+        btn.textContent = d.gatt?.connected ? "ใช้อุปกรณ์นี้ / Use" : "เชื่อมต่อ / Connect";
+        btn.addEventListener("click", () => {
+          closeMuseModal();
+          connectMuseDevice(d, false);
+        });
         const forget = document.createElement("button");
         forget.type = "button";
         forget.className = "secondary";
-        forget.textContent = "✕";
-        forget.title = "ลบอุปกรณ์นี้ / Forget device";
+        forget.textContent = "ลบ / Forget";
         forget.addEventListener("click", async () => {
           try {
             await d.forget();
           } catch (e) {}
           renderMuseDevices();
         });
-        wrap.append(btn, forget);
-        box.appendChild(wrap);
+        btns.append(btn, forget);
+        row.append(left, btns);
+        box.appendChild(row);
       });
     }
     async function loadMuseDriver() {
@@ -1045,18 +1073,25 @@ export default function Home() {
       renderMuseDevices();
     }
     async function connectMuse() {
-      const b = getEl("connectMuseBtn");
       resetStages();
       if (!window.isSecureContext) {
         setMuseStatus("ต้องเปิดผ่าน HTTPS", true);
         return;
       }
       if (!navigator.bluetooth) {
-        setMuseStatus("Web Bluetooth ไม่พร้อม กรุณาใช้ Google Chrome", true);
+        setMuseStatus(
+          "Web Bluetooth ไม่พร้อมใช้งาน — 1) ต้องเป็น Google Chrome จริง (ไม่ใช่ Chrome บน iPhone หรือ browser ในแอป LINE/Facebook) 2) เปิด chrome://flags/#enable-web-bluetooth เป็น Enabled แล้วกด Relaunch 3) รีเฟรชหน้านี้",
+          true
+        );
         return;
       }
+      setMuseStatus("เลือกอุปกรณ์ Bluetooth ที่ต้องการเชื่อมต่อ / Pick a Bluetooth device");
+      openMuseModal();
+    }
+    async function scanNewMuseDevice() {
+      const b = getEl("museScanBtn");
       b.disabled = true;
-      b.textContent = "Select Muse-xxxx… / เลือก Muse…";
+      b.textContent = "กำลังเปิดหน้าต่าง Bluetooth… / Opening…";
       setMuseStatus("1/4 เลือกอุปกรณ์ Muse-xxxx ในหน้าต่าง Bluetooth");
       let device = null;
       try {
@@ -1066,11 +1101,14 @@ export default function Home() {
         });
       } catch (err) {
         b.disabled = false;
-        b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
+        b.textContent = "🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device";
         if (err?.name === "NotFoundError") setMuseStatus("ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse 2 กรุณากด Connect แล้วเลือก Muse-xxxx", true);
         else setMuseStatus("Device selection error: " + (err?.name || "Error") + " — " + (err?.message || err), true);
         return;
       }
+      b.disabled = false;
+      b.textContent = "🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device";
+      closeMuseModal();
       await connectMuseDevice(device);
     }
     async function disconnectMuse() {
@@ -1191,6 +1229,11 @@ export default function Home() {
 
     getEl("connectMuseBtn").addEventListener("click", connectMuse);
     getEl("disconnectMuseBtn").addEventListener("click", disconnectMuse);
+    getEl("museScanBtn").addEventListener("click", scanNewMuseDevice);
+    getEl("museModalClose").addEventListener("click", closeMuseModal);
+    getEl("museModal").addEventListener("click", (e) => {
+      if (e.target.id === "museModal") closeMuseModal();
+    });
     getEl("baselineBtn").addEventListener("click", startBaseline);
     getEl("stopBaselineBtn").addEventListener("click", () => stopBaseline(false));
 
@@ -1515,7 +1558,36 @@ export default function Home() {
                   </button>
                 </div>
                 <div id="btHelp" className="notice" style={{ display: "none" }}></div>
-                <div id="museDeviceList" style={{ display: "flex", flexWrap: "wrap", gap: "8px", margin: "10px 0", fontSize: "13px", alignItems: "center" }}></div>
+                <div
+                  id="museModal"
+                  style={{
+                    display: "none",
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(2,10,20,.75)",
+                    zIndex: 1000,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "16px",
+                  }}
+                >
+                  <div className="card" style={{ width: "100%", maxWidth: "480px", maxHeight: "80vh", overflow: "auto" }}>
+                    <div className="hero">
+                      <h3 style={{ marginBottom: "4px" }}>เลือกอุปกรณ์ Bluetooth / Select Bluetooth device</h3>
+                      <button id="museModalClose" className="secondary" type="button">
+                        ✕ ปิด / Close
+                      </button>
+                    </div>
+                    <div id="museModalList" style={{ display: "flex", flexDirection: "column", gap: "8px", margin: "12px 0" }}></div>
+                    <button id="museScanBtn" type="button" style={{ width: "100%" }}>
+                      🔍 ค้นหาอุปกรณ์ใหม่… / Scan new device
+                    </button>
+                    <p className="muted" style={{ marginTop: "10px", fontSize: "12px" }}>
+                      อุปกรณ์ Muse รอบตัวจะปรากฏในหน้าต่าง Bluetooth ของ Chrome เมื่อกดค้นหาอุปกรณ์ใหม่ / Nearby Muse devices appear in the
+                      Chrome Bluetooth window when you scan for a new device.
+                    </p>
+                  </div>
+                </div>
                 <div id="museGattStages" style={{ display: "flex", flexWrap: "wrap", gap: "10px", margin: "10px 0", fontSize: "12px" }}>
                   <span data-stage="found" data-label="Muse Found" style={{ opacity: ".5" }}>
                     ○ Muse Found
