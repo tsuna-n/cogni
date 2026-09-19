@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BleDevicesPanel from "@/app/components/BleDevicesPanel";
 import { TH } from "@/lib/th-dict";
 
 const AUTH_ERRORS = {
@@ -1562,6 +1563,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+              <BleDevicesPanel />
               <div id="stepbox" className="card" style={{ marginTop: "14px" }}></div>
             </section>
 
