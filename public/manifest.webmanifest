@@ -1,0 +1,11 @@
+{
+  "name": "CogniLoad-XAI Muse 2 Cognitive Assessment",
+  "short_name": "CogniLoad-XAI",
+  "description": "MMSE-Thai 2002, cognitive games, Muse 2 EEG, dashboard and CSV research prototype.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#081522",
+  "theme_color": "#081522",
+  "icons": []
+}
