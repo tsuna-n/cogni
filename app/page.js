@@ -18,6 +18,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Home() {
   const [authed, setAuthed] = useState(null);
+  const [account, setAccount] = useState("");
   const [mode, setMode] = useState("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -101,6 +102,43 @@ export default function Home() {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (authed !== false) return;
+    const c = document.getElementById("authWave");
+    if (!c || !c.getContext) return;
+    const ctx = c.getContext("2d");
+    let raf = 0;
+    const layers = [
+      { color: "rgba(51,214,255,.5)", amp: 46, speed: 0.9, freq: 1.6, width: 2 },
+      { color: "rgba(155,123,255,.35)", amp: 30, speed: 1.4, freq: 2.4, width: 1.5 },
+      { color: "rgba(79,224,161,.22)", amp: 22, speed: 0.6, freq: 3.2, width: 1 },
+    ];
+    const draw = (t) => {
+      const w = c.width,
+        h = c.height;
+      ctx.clearRect(0, 0, w, h);
+      layers.forEach((L) => {
+        ctx.strokeStyle = L.color;
+        ctx.lineWidth = L.width;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 4) {
+          const p = (x / w) * Math.PI * 2 * L.freq;
+          const y =
+            h / 2 +
+            Math.sin(p + (t / 1000) * L.speed) * L.amp +
+            Math.sin(p * 3.7 + (t / 700) * L.speed) * L.amp * 0.3 +
+            (Math.random() - 0.5) * 3;
+          if (x === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      });
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [authed]);
 
   useEffect(() => {
     const $ = (id) => document.getElementById(id);
@@ -340,10 +378,12 @@ export default function Home() {
       } catch {}
       sessionStorage.removeItem("cogni_login");
       sessionStorage.removeItem("cogni_name");
+      setAccount("");
       setAuthed(false);
     }
     window.__enterApp = (accountEmail, displayName, fresh) => {
       initApp(accountEmail, displayName, fresh);
+      setAccount(String(displayName || accountEmail || ""));
       setAuthed(true);
     };
     restoreSession();
@@ -378,11 +418,21 @@ export default function Home() {
       } else showSummary();
     }
     function saveProfile() {
+      const id = $("jpId").value.trim();
+      const age = Number($("jpAge").value);
+      if (!id) {
+        alert("กรุณากรอกรหัสผู้เข้าร่วม / Please enter a Participant ID");
+        return;
+      }
+      if (!Number.isFinite(age) || age < 10 || age > 120) {
+        alert("อายุต้องเป็นตัวเลขระหว่าง 10–120 / Age must be a number between 10–120");
+        return;
+      }
       journey.profile = {
-        id: $("jpId").value,
-        age: $("jpAge").value,
+        id,
+        age,
         hand: $("jpHand").value,
-        session: $("jpSession").value,
+        session: $("jpSession").value.trim() || "S01",
       };
       nextStep();
     }
@@ -516,13 +566,24 @@ export default function Home() {
       let em = sessionStorage.getItem("cogni_login");
       if (em && !journey.completedSaved) {
         let hist = JSON.parse(localStorage.getItem("cogni_assessments_" + em) || "[]");
-        hist.push({ date: new Date().toISOString(), screen: journey.screen, games: journey.games, profile: journey.profile });
+        hist.push({ date: new Date().toISOString(), screen: journey.screen, games: journey.games, profile: journey.profile, eeg: journey.eeg || null });
         localStorage.setItem("cogni_assessments_" + em, JSON.stringify(hist));
         journey.completedSaved = true;
         saveJourney();
       }
       let avg = journey.games.length ? Math.round(journey.games.reduce((a, x) => a + x.accuracy, 0) / journey.games.length) : 0;
-      $("stepbox").innerHTML = `<h2>Assessment Summary / สรุปผลการประเมิน</h2><div class="grid"><div class="card metric"><small>Screening score</small><b>${journey.screen ? journey.screen.total + "/" + journey.screen.max : "—"}</b></div><div class="card metric"><small>Mean game accuracy</small><b>${avg}%</b></div><div class="card metric"><small>Completed games</small><b>${journey.games.length}/3</b></div><div class="card metric"><small>Status</small><b>Complete</b></div></div><div class="card" style="margin-top:14px"><h3>Game results</h3><table><tr><th>Game</th><th>Accuracy</th><th>Reaction time</th><th>Errors</th><th>RT variability</th></tr>${journey.games
+      let baselineCard;
+      if (journey.eeg) {
+        baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><table><tr><th>Channel</th><th>Mean</th><th>SD</th><th>Range</th></tr>${journey.eeg.channels
+          .map(
+            (c) =>
+              `<tr><td>${c.name}</td><td>${c.samples ? c.mean + " µV" : "—"}</td><td>${c.samples ? c.sd + " µV" : "—"}</td><td>${c.samples ? c.min + "–" + c.max + " µV" : "—"}</td></tr>`
+          )
+          .join("")}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString()} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
+      } else {
+        baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><p class="muted">ยังไม่ได้บันทึก Baseline — เชื่อมต่อ Muse 2 แล้วกด Start 30-sec Baseline ที่ส่วนบน / Baseline not recorded — connect Muse 2 and start the 30-second baseline above.</p></div>`;
+      }
+      $("stepbox").innerHTML = `<h2>Assessment Summary / สรุปผลการประเมิน</h2><div class="grid"><div class="card metric"><small>Screening score</small><b>${journey.screen ? journey.screen.total + "/" + journey.screen.max : "—"}</b></div><div class="card metric"><small>Mean game accuracy</small><b>${avg}%</b></div><div class="card metric"><small>Completed games</small><b>${journey.games.length}/3</b></div><div class="card metric"><small>Status</small><b>Complete</b></div></div>${baselineCard}<div class="card" style="margin-top:14px"><h3>Game results</h3><table><tr><th>Game</th><th>Accuracy</th><th>Reaction time</th><th>Errors</th><th>RT variability</th></tr>${journey.games
         .map(
           (x) =>
             `<tr><td>${["Context Switch Trail", "Echo Sequence", "Pattern Drift"][x.game - 1]}</td><td>${x.accuracy}%</td><td>${x.rt} ms</td><td>${x.errors}</td><td>${x.variability ?? "—"} ms</td></tr>`
@@ -618,15 +679,25 @@ export default function Home() {
           "game3_accuracy",
           "game3_rt_ms",
           "game3_errors",
+          "eeg_recorded_at",
+          "eeg_packets",
+          "tp9_mean_uv",
+          "af7_mean_uv",
+          "af8_mean_uv",
+          "tp10_mean_uv",
         ],
       ];
-      let records = hist.length ? hist : [{ date: "", screen: journey.screen, games: journey.games, profile: journey.profile }];
+      let records = hist.length ? hist : [{ date: "", screen: journey.screen, games: journey.games, profile: journey.profile, eeg: journey.eeg || null }];
       records.forEach((a) => {
         let s = a.screen || {},
           g = a.games || [],
           p = a.profile || {},
+          e = a.eeg,
           d = s.total == null ? "" : s.total <= s.cut ? "red" : s.total - s.cut <= 3 ? "yellow" : "green";
-        rows.push([em, logs.length, a.date, p.id, p.age, s.education, s.total, s.max, s.cut, s.screenPositive, d, ...[0, 1, 2].flatMap((i) => [g[i]?.accuracy, g[i]?.rt, g[i]?.errors])]);
+        let eegCols = e
+          ? [e.recordedAt, e.packets, ...[0, 1, 2, 3].map((i) => (e.channels[i]?.samples ? e.channels[i].mean : ""))]
+          : ["", "", "", "", "", ""];
+        rows.push([em, logs.length, a.date, p.id, p.age, s.education, s.total, s.max, s.cut, s.screenPositive, d, ...[0, 1, 2].flatMap((i) => [g[i]?.accuracy, g[i]?.rt, g[i]?.errors]), ...eegCols]);
       });
       let blob = new Blob(["\ufeff" + rows.map((r) => r.map(csvEscape).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }),
         u = URL.createObjectURL(blob),
@@ -769,7 +840,29 @@ export default function Home() {
     }
     async function loadMuseDriver() {
       if (museModuleReady) return museModuleReady;
-      if (!museModulePromise) museModulePromise = import("https://cdn.jsdelivr.net/npm/muse-jsx@0.3.1/+esm").then((m) => (museModuleReady = m));
+      if (!museModulePromise) {
+        museModulePromise = new Promise((resolve, reject) => {
+          const onReady = () => {
+            cleanup();
+            resolve(window.__museModule);
+          };
+          const onError = () => {
+            cleanup();
+            reject(new Error(window.__museModuleError || "Failed to load Muse driver from CDN"));
+          };
+          const cleanup = () => {
+            window.removeEventListener("muse-module-ready", onReady);
+            window.removeEventListener("muse-module-error", onError);
+          };
+          window.addEventListener("muse-module-ready", onReady, { once: true });
+          window.addEventListener("muse-module-error", onError, { once: true });
+          const s = document.createElement("script");
+          s.type = "module";
+          s.textContent =
+            'try { const m = await import("https://cdn.jsdelivr.net/npm/muse-jsx@0.3.1/+esm"); window.__museModule = m; window.dispatchEvent(new Event("muse-module-ready")); } catch (e) { window.__museModuleError = (e && e.message) || String(e); window.dispatchEvent(new Event("muse-module-error")); }';
+          document.head.appendChild(s);
+        });
+      }
       return museModulePromise;
     }
     async function prepareMuse() {
@@ -784,6 +877,44 @@ export default function Home() {
       } catch (e) {
         setMuseStatus("Muse driver load failed: " + e.message, true);
       }
+    }
+    function subscribeEeg() {
+      if (eegSub) {
+        try {
+          eegSub.unsubscribe();
+        } catch (e) {}
+      }
+      let firstPacket = false;
+      eegSub = museClient.eegReadings.subscribe({
+        next: (reading) => {
+          packetCount++;
+          const electrode = Number(reading.electrode);
+          const samples = Array.isArray(reading.samples) ? reading.samples : [];
+          if (electrode >= 0 && electrode < 4 && samples.length) {
+            latest[electrode] = samples[samples.length - 1];
+            samples.forEach((v) => {
+              if (Number.isFinite(v)) {
+                traces[electrode].push(v);
+                if (traces[electrode].length > 512) traces[electrode].shift();
+                plotBuffers[electrode].push(v);
+                if (plotBuffers[electrode].length > maxPlot) plotBuffers[electrode].shift();
+                if (baselineStart && !baselineFinalized) baselineSamples[electrode].push(v);
+              }
+            });
+            if (!firstPacket) {
+              firstPacket = true;
+              setStage("eeg");
+              setMuseStatus("4/4 Connected + EEG streaming / เชื่อมต่อและรับ EEG แล้ว");
+              getEl("baselineBtn").disabled = false;
+            }
+          }
+          renderMuse();
+        },
+        error: (err) => {
+          setMuseStatus("EEG stream error: " + (err?.message || err), true);
+          getEl("baselineBtn").disabled = true;
+        },
+      });
     }
     async function connectMuse() {
       const b = getEl("connectMuseBtn");
@@ -816,42 +947,7 @@ export default function Home() {
         await museClient.start();
         setMuseStatus("3/4 EEG started. Waiting for first packet… / รอข้อมูล EEG");
 
-        if (eegSub) {
-          try {
-            eegSub.unsubscribe();
-          } catch (e) {}
-        }
-        let firstPacket = false;
-        eegSub = museClient.eegReadings.subscribe({
-          next: (reading) => {
-            packetCount++;
-            const electrode = Number(reading.electrode);
-            const samples = Array.isArray(reading.samples) ? reading.samples : [];
-            if (electrode >= 0 && electrode < 4 && samples.length) {
-              latest[electrode] = samples[samples.length - 1];
-              samples.forEach((v) => {
-                if (Number.isFinite(v)) {
-                  traces[electrode].push(v);
-                  if (traces[electrode].length > 512) traces[electrode].shift();
-                  plotBuffers[electrode].push(v);
-                  if (plotBuffers[electrode].length > maxPlot) plotBuffers[electrode].shift();
-                  if (baselineStart && !baselineFinalized) baselineSamples[electrode].push(v);
-                }
-              });
-              if (!firstPacket) {
-                firstPacket = true;
-                setStage("eeg");
-                setMuseStatus("4/4 Connected + EEG streaming / เชื่อมต่อและรับ EEG แล้ว");
-                getEl("baselineBtn").disabled = false;
-              }
-            }
-            renderMuse();
-          },
-          error: (err) => {
-            setMuseStatus("EEG stream error: " + (err?.message || err), true);
-            getEl("baselineBtn").disabled = true;
-          },
-        });
+        subscribeEeg();
         museConnected = true;
         setMuseConnected(true);
         getEl("disconnectMuseBtn").disabled = false;
@@ -955,6 +1051,21 @@ export default function Home() {
       const info = getEl("baselineInfo");
       if (info) info.textContent = (auto ? "Baseline 30 s complete / ครบ 30 วินาที" : "Baseline stopped / หยุด Baseline") + " · Signal packets: " + packetCount;
       setMuseStatus(auto ? "Baseline complete / Baseline เสร็จสิ้น" : "Baseline stopped / หยุด Baseline แล้ว");
+      const eegChannels = baselineSamples.map((s, ch) => {
+        if (!s.length) return { name: names[ch], samples: 0 };
+        const mean = s.reduce((a, b) => a + b, 0) / s.length;
+        const sd = Math.sqrt(s.reduce((a, b) => a + (b - mean) ** 2, 0) / s.length);
+        return {
+          name: names[ch],
+          samples: s.length,
+          mean: Number(mean.toFixed(2)),
+          sd: Number(sd.toFixed(2)),
+          min: Number(Math.min(...s).toFixed(2)),
+          max: Number(Math.max(...s).toFixed(2)),
+        };
+      });
+      journey.eeg = { recordedAt: new Date().toISOString(), packets: packetCount, channels: eegChannels };
+      saveJourney();
     }
 
     prepareMuse();
@@ -963,6 +1074,14 @@ export default function Home() {
     getEl("disconnectMuseBtn").addEventListener("click", disconnectMuse);
     getEl("baselineBtn").addEventListener("click", startBaseline);
     getEl("stopBaselineBtn").addEventListener("click", () => stopBaseline(false));
+
+    /* ---------- Section navigation ---------- */
+    function showSection(id) {
+      document.querySelectorAll("main section").forEach((s) => s.classList.toggle("active", s.id === id));
+      const nav = document.getElementById("mainNav");
+      if (nav) nav.querySelectorAll("[data-sec]").forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
 
     /* ---------- PWA: service worker + install prompt ---------- */
     if ("serviceWorker" in navigator && location.protocol !== "file:") {
@@ -995,6 +1114,7 @@ export default function Home() {
     Object.assign(window, {
       logoutUser,
       toggleLang,
+      showSection,
       exportCSV,
       simulate,
       makeFeatures,
@@ -1056,107 +1176,105 @@ export default function Home() {
       )}
 
       {/* ---------- Auth screen ---------- */}
-      <div
-        id="authScreen"
-        style={{
-          minHeight: "100vh",
-          display: authed === false ? "grid" : "none",
-          placeItems: "center",
-          padding: "25px",
-          background: "linear-gradient(135deg,#050b14,#0b1e35)",
-        }}
-      >
-        <div className="card" style={{ width: "min(470px,100%)" }}>
-          <div className="brand" style={{ marginBottom: "8px" }}>
+      <div id="authScreen" className="auth-bg" style={{ display: authed === false ? "grid" : "none" }}>
+        <canvas id="authWave" width="1600" height="420" aria-hidden="true"></canvas>
+        <div className="auth-inner">
+          <div className="auth-logo">🧠</div>
+          <div className="brand" style={{ fontSize: "26px" }}>
             CogniLoad<span>-XAI</span>
-            <div style={{ fontSize: "11px", color: "#8da3ba", marginTop: "4px" }}>Cognitive Assessment System</div>
           </div>
-          <h2 id="authTitle">{mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Register / สมัครสมาชิก"}</h2>
-          <p className="muted">Research participant portal / ระบบสำหรับผู้เข้าร่วมการวิจัย</p>
-          <div className="controls" style={{ gap: "8px" }}>
-            <button type="button" className={mode === "login" ? "" : "secondary"} onClick={() => switchMode("login")}>
-              Sign in / เข้าสู่ระบบ
-            </button>
-            <button type="button" className={mode === "register" ? "" : "secondary"} onClick={() => switchMode("register")}>
-              Register / สมัครสมาชิก
-            </button>
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitAuth();
-            }}
-          >
-            {mode === "register" && (
-              <label>
-                Full name / ชื่อ-นามสกุล
-                <input
-                  id="authName"
-                  type="text"
-                  autoComplete="name"
-                  maxLength={80}
-                  placeholder="สมชาย ใจดี (optional)"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
-              </label>
-            )}
-            <label>
-              Email
-              <input
-                id="authEmail"
-                type="email"
-                autoComplete="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </label>
-            <label>
-              Password / รหัสผ่าน
-              <input
-                id="authPass"
-                type={showPassword ? "text" : "password"}
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-                placeholder={mode === "register" ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร" : "Your password / รหัสผ่านของคุณ"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </label>
-            {mode === "register" && (
-              <label>
-                Confirm password / ยืนยันรหัสผ่าน
-                <input
-                  id="authPassConfirm"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Type the same password again / กรอกรหัสผ่านเดิมอีกครั้ง"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                />
-              </label>
-            )}
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", margin: "10px 0" }}>
-              <input
-                type="checkbox"
-                checked={showPassword}
-                onChange={(e) => setShowPassword(e.target.checked)}
-                style={{ width: "auto", margin: 0 }}
-              />
-              <span style={{ fontWeight: 400 }}>Show password / แสดงรหัสผ่าน</span>
-            </label>
-            <div className="controls">
-              <button type="submit" disabled={busy}>
-                {busy ? "Please wait… / กำลังดำเนินการ" : mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Create account / สมัครสมาชิก"}
+          <p className="muted" style={{ margin: "4px 0 0" }}>Cognitive Assessment System / ระบบประเมินการรู้คิด</p>
+          <div className="auth-card">
+            <h2 id="authTitle">{mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Register / สมัครสมาชิก"}</h2>
+            <p className="muted">Research participant portal / ระบบสำหรับผู้เข้าร่วมการวิจัย</p>
+            <div className="auth-tabs">
+              <button type="button" className={"auth-tab" + (mode === "login" ? " active" : "")} onClick={() => switchMode("login")}>
+                Sign in
+              </button>
+              <button type="button" className={"auth-tab" + (mode === "register" ? " active" : "")} onClick={() => switchMode("register")}>
+                Register
               </button>
             </div>
-          </form>
-          <div id="authMsg" className="muted" style={authError ? { color: "#ff8b8b" } : undefined} aria-live="polite">
-            {authMessage ||
-              (mode === "register"
-                ? "สมัครสมาชิกเพื่อเริ่มการประเมิน / Create an account to start the assessment."
-                : "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one.")}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitAuth();
+              }}
+            >
+              {mode === "register" && (
+                <label>
+                  Full name / ชื่อ-นามสกุล
+                  <input
+                    id="authName"
+                    type="text"
+                    autoComplete="name"
+                    maxLength={80}
+                    placeholder="สมชาย ใจดี (optional)"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </label>
+              )}
+              <label>
+                Email
+                <input
+                  id="authEmail"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </label>
+              <label>
+                Password / รหัสผ่าน
+                <input
+                  id="authPass"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  placeholder={mode === "register" ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร" : "Your password / รหัสผ่านของคุณ"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </label>
+              {mode === "register" && (
+                <label>
+                  Confirm password / ยืนยันรหัสผ่าน
+                  <input
+                    id="authPassConfirm"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    placeholder="Type the same password again / กรอกรหัสผ่านเดิมอีกครั้ง"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                  />
+                </label>
+              )}
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", margin: "10px 0" }}>
+                <input
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={(e) => setShowPassword(e.target.checked)}
+                  style={{ width: "auto", margin: 0 }}
+                />
+                <span style={{ fontWeight: 400 }}>Show password / แสดงรหัสผ่าน</span>
+              </label>
+              <div className="controls">
+                <button type="submit" disabled={busy} style={{ width: "100%" }}>
+                  {busy ? "Please wait… / กำลังดำเนินการ" : mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Create account / สมัครสมาชิก"}
+                </button>
+              </div>
+            </form>
+            <div id="authMsg" className="muted" style={authError ? { color: "#ff8b8b" } : undefined} aria-live="polite">
+              {authMessage ||
+                (mode === "register"
+                  ? "สมัครสมาชิกเพื่อเริ่มการประเมิน / Create an account to start the assessment."
+                  : "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one.")}
+            </div>
           </div>
+          <p className="auth-foot">
+            📶 เชื่อมต่ออุปกรณ์ Muse 2 EEG ทำได้ในหน้าหลัก หลังเข้าสู่ระบบ / Connect the Muse 2 EEG device on the main page after sign-in.
+          </p>
         </div>
       </div>
 
@@ -1166,14 +1284,37 @@ export default function Home() {
           <div className="brand">
             CogniLoad<span>-XAI</span>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <div className="badge">EEG Cognitive Workload Research Prototype</div>
             <button className="secondary" id="langBtn" onClick={() => call("toggleLang")}>
               ไทย
             </button>
-            <div className="badge">EEG Cognitive Workload Research Prototype</div>
+            {account && <div className="badge">👤 {account}</div>}
+            <button className="secondary" onClick={() => call("logoutUser")}>
+              Logout / ออกจากระบบ
+            </button>
           </div>
         </header>
         <div className="wrap">
+          <nav className="mainnav" id="mainNav">
+            {[
+              ["journey", "🧭 Journey / เส้นทาง"],
+              ["dashboard", "📊 Dashboard / แดชบอร์ด"],
+              ["history", "🕘 History / ประวัติ"],
+              ["cogscreen", "🧠 Screening / คัดกรอง"],
+              ["games", "🎮 Games / เกม"],
+              ["participant", "👤 Participant / ผู้เข้าร่วม"],
+              ["acquisition", "📶 EEG Lab"],
+              ["preprocess", "⚙️ Preprocess / ประมวลผล"],
+              ["features", "📈 Features / คุณลักษณะ"],
+              ["models", "🤖 Models / โมเดล"],
+              ["xai", "💡 XAI"],
+            ].map(([sec, label]) => (
+              <button key={sec} data-sec={sec} className={sec === "journey" ? "active" : ""} onClick={() => call("showSection", sec)}>
+                {label}
+              </button>
+            ))}
+          </nav>
           <main>
             {/* ---------- Journey ---------- */}
             <section id="journey" className="active">
