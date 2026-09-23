@@ -17,7 +17,7 @@ The screen also warns when at least 1% of samples in a channel reach the Muse AD
 node scripts/validate-muse-csv.mjs /path/to/muse_recording.csv
 ```
 
-The validator prints phase timing, samples per channel, packet gaps, clipping percentages and game trial markers. `unansweredTrials` identifies stimuli without a response, including a trial cut off by the Task deadline; analyze these separately. It reports data integrity and basic signal checks, not clinical EEG quality or an Alzheimer diagnosis.
+The validator prints phase timing, samples per channel, packet gaps, clipping percentages, an approximate 50 Hz amplitude from two-second windows, and game trial markers. A 50 Hz warning is a heuristic for possible mains interference, not a clinical signal-quality cutoff. The live graph centers each channel on its recent mean and uses an automatic display scale; neither operation changes the raw EEG in the CSV. The four large numbers are the latest raw samples, so their signed values can drift and are not scores. `unansweredTrials` identifies stimuli without a response, including a trial cut off by the Task deadline; analyze these separately. It reports data integrity and basic signal checks, not clinical EEG quality or an Alzheimer diagnosis.
 
 This is a research prototype; signal display and sample counts do not establish clinical signal quality or a diagnosis. Validate timing and data completeness against your study protocol before collecting participants.
 

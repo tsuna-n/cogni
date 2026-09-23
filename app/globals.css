@@ -79,6 +79,8 @@ section{display:none}section.active{display:block}.formgrid{display:grid;grid-te
 .study-channel-count .study-channel-alert{border-color:#d85b67;background:#4a1d22;color:#ffe0e4}
 .study-signal-warning{padding:12px 14px;border:1px solid #d85b67;border-radius:10px;background:#4a1d22;color:#ffe0e4;font-size:13px;margin:14px 0 0}
 .study-message{min-height:20px;margin:14px 0 0;color:var(--muted);font-size:13px}
+.muse-line-noise{font-size:12px;margin-top:7px}
+.muse-plot-note{font-size:12px;margin:6px 0 0}
 .study-saved-list{display:grid;gap:9px}
 .study-saved-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #294963;border-radius:11px;background:#081522}
 .study-saved-item>div:first-child{display:grid;gap:4px;min-width:0}

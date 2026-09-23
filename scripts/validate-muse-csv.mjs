@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
+import { LINE_WINDOW_SAMPLES, summarizeEegWindow } from "../lib/eeg-signal-quality.mjs";
 
 const file = process.argv[2];
 if (!file) {
@@ -50,6 +51,8 @@ async function main() {
   const phaseSamples = Object.fromEntries(["baseline", "task", "rest"].map((phase) => [phase, [0, 0, 0, 0]]));
   const phaseRailSamples = Object.fromEntries(["baseline", "task", "rest"].map((phase) => [phase, [0, 0, 0, 0]]));
   const signal = channelNames.map(() => ({ count: 0, mean: 0, m2: 0, min: Infinity, max: -Infinity, rail: 0, nearRail: 0 }));
+  const lineWindows = channelNames.map(() => []);
+  const lineQuality = channelNames.map(() => []);
   const markers = new Map();
   const markerAt = new Map();
   const trialStimuli = new Set();
@@ -124,6 +127,11 @@ async function main() {
           if (phaseRailSamples[get("phase")]) phaseRailSamples[get("phase")][channel]++;
         }
         if (Math.abs(value) >= 950) stats.nearRail++;
+        lineWindows[channel].push(value);
+        if (lineWindows[channel].length === LINE_WINDOW_SAMPLES) {
+          lineQuality[channel].push(summarizeEegWindow(lineWindows[channel]));
+          lineWindows[channel] = [];
+        }
       }
       if (sampleIndex === 0 && Number.isFinite(receivedAt)) {
         firstReceivedAt[channel] ??= receivedAt;
@@ -164,6 +172,8 @@ async function main() {
     if (duplicatePackets[channel]) warnings.push(`${channelNames[channel]}: ${duplicatePackets[channel]} duplicate packets`);
     if (samples[channel] > 1 && signal[channel].m2 === 0) warnings.push(`${channelNames[channel]}: flat signal values`);
     if (samples[channel] && signal[channel].rail / samples[channel] >= 0.01) warnings.push(`${channelNames[channel]}: ${(100 * signal[channel].rail / samples[channel]).toFixed(1)}% samples at ADC limit; check electrode contact`);
+    const dominant = lineQuality[channel].filter((window) => window.line50Dominant).length;
+    if (dominant >= 2) warnings.push(`${channelNames[channel]}: possible 50 Hz interference in ${dominant}/${lineQuality[channel].length} two-second windows; inspect contact and environment`);
   }
   for (const [trial, count] of trialResponses) {
     if (!trialStimuli.has(trial)) errors.push(`response without stimulus in trial ${trial}`);
@@ -206,6 +216,10 @@ async function main() {
       railSamples: signal[index].rail,
       railPercent: samples[index] ? Number((100 * signal[index].rail / samples[index]).toFixed(1)) : null,
       nearRailPercent: samples[index] ? Number((100 * signal[index].nearRail / samples[index]).toFixed(1)) : null,
+      line50Windows: lineQuality[index].length,
+      line50DominantWindows: lineQuality[index].filter((window) => window.line50Dominant).length,
+      line50MedianAmplitudeUv: lineQuality[index].length ? Number([...lineQuality[index]].map((window) => window.line50AmplitudeUv).sort((a, b) => a - b)[Math.floor(lineQuality[index].length / 2)].toFixed(2)) : null,
+      line50MaxAmplitudeUv: lineQuality[index].length ? Number(Math.max(...lineQuality[index].map((window) => window.line50AmplitudeUv)).toFixed(2)) : null,
     }])),
     phaseSamples: Object.fromEntries(Object.entries(phaseSamples).map(([phase, counts]) => [phase, Object.fromEntries(channelNames.map((name, index) => [name, counts[index]]))])),
     phaseRailPercent: Object.fromEntries(Object.entries(phaseRailSamples).map(([phase, counts]) => [phase, Object.fromEntries(channelNames.map((name, index) => [name, phaseSamples[phase][index] ? Number((100 * counts[index] / phaseSamples[phase][index]).toFixed(1)) : null]))])),

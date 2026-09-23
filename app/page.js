@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ResearchSession from "@/app/components/ResearchSession";
+import { LINE_WINDOW_SAMPLES, summarizeEegWindow } from "@/lib/eeg-signal-quality.mjs";
 import { TH } from "@/lib/th-dict";
 
 const AUTH_ERRORS = {
@@ -821,7 +822,8 @@ export default function Home() {
     const plotBuffers = [[], [], [], []],
       maxPlot = 500;
     let latest = [null, null, null, null],
-      traces = [[], [], [], []];
+      traces = [[], [], [], []],
+      lastQualityAt = 0;
 
     function museMessage(msg, isError = false) {
       const h = $("btHelp");
@@ -837,6 +839,14 @@ export default function Home() {
         : "● Not connected / ยังไม่เชื่อมต่อ";
       s.style.background = on ? "#123c2b" : "#0a3140";
       if (!on) {
+        latest = [null, null, null, null];
+        traces = [[], [], [], []];
+        plotBuffers.forEach((buffer) => { buffer.length = 0; });
+        for (let channel = 0; channel < 4; channel++) {
+          $("ch" + channel).textContent = "—";
+          $("muse50_" + channel).textContent = "50 Hz: —";
+        }
+        $("museNoiseWarning").style.display = "none";
         window.__museReady = false;
         window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: false } }));
       }
@@ -845,6 +855,22 @@ export default function Home() {
       for (let ch = 0; ch < 4; ch++) {
         const el = $("ch" + ch);
         if (el && latest[ch] != null && Number.isFinite(latest[ch])) el.textContent = latest[ch].toFixed(2);
+      }
+    }
+    function updateMuseQuality() {
+      if (Date.now() - lastQualityAt < 1000) return;
+      lastQualityAt = Date.now();
+      const noisy = [];
+      traces.forEach((samples, channel) => {
+        const quality = summarizeEegWindow(samples);
+        const label = $("muse50_" + channel);
+        if (label) label.textContent = quality ? `50 Hz ≈ ${quality.line50AmplitudeUv.toFixed(1)} µV` : "50 Hz: รอข้อมูล 2 วินาที";
+        if (quality?.line50Dominant) noisy.push(["TP9", "AF7", "AF8", "TP10"][channel]);
+      });
+      const warning = $("museNoiseWarning");
+      if (warning) {
+        warning.style.display = noisy.length ? "block" : "none";
+        warning.textContent = noisy.length ? `คลื่นใกล้ 50 Hz เด่นที่ ${noisy.join(", ")} อาจเป็นสัญญาณรบกวนไฟฟ้า ตรวจเซนเซอร์และสภาพแวดล้อมแล้วทดสอบใหม่ก่อนเก็บข้อมูลวิจัย` : "";
       }
     }
     function drawMuse() {
@@ -867,16 +893,23 @@ export default function Home() {
       const cols = ["#33d6ff", "#9b7bff", "#4fe0a1", "#ffc857"];
       plotBuffers.forEach((buf, ch) => {
         if (buf.length < 2) return;
-        let mean = buf.reduce((a, b) => a + b, 0) / buf.length;
+        const mean = buf.reduce((a, b) => a + b, 0) / buf.length;
+        const variance = buf.reduce((sum, value) => sum + (value - mean) ** 2, 0) / buf.length;
+        const scale = Math.max(20, 3 * Math.sqrt(variance));
+        const rowHeight = h / 4;
+        const halfHeight = rowHeight / 2 - 5;
         x.strokeStyle = cols[ch];
         x.lineWidth = 1.5;
         x.beginPath();
         buf.forEach((v, i) => {
-          let px = (i / (maxPlot - 1)) * w,
-            py = ((ch + 0.5) * h) / 4 - Math.max(-50, Math.min(50, v - mean)) * (h / 4) / 120;
+          const px = (i / (maxPlot - 1)) * w;
+          const py = (ch + 0.5) * rowHeight - Math.max(-1, Math.min(1, (v - mean) / scale)) * halfHeight;
           i ? x.lineTo(px, py) : x.moveTo(px, py);
         });
         x.stroke();
+        x.fillStyle = cols[ch];
+        x.font = "11px system-ui";
+        x.fillText(`±${Math.round(scale)} µV`, 7, ch * rowHeight + 12);
       });
     }
     let rafId = requestAnimationFrame(function loop() {
@@ -990,7 +1023,7 @@ export default function Home() {
             samples.forEach((v) => {
               if (Number.isFinite(v)) {
                 traces[electrode].push(v);
-                if (traces[electrode].length > 512) traces[electrode].shift();
+                if (traces[electrode].length > LINE_WINDOW_SAMPLES) traces[electrode].shift();
                 plotBuffers[electrode].push(v);
                 if (plotBuffers[electrode].length > maxPlot) plotBuffers[electrode].shift();
                 if (baselineStart && !baselineFinalized) baselineSamples[electrode].push(v);
@@ -1006,6 +1039,7 @@ export default function Home() {
             }
           }
           renderMuse();
+          updateMuseQuality();
         },
         error: (err) => {
           window.__museReady = false;
@@ -1611,25 +1645,31 @@ export default function Home() {
                   <div className="card metric">
                     <small>TP9</small>
                     <b id="ch0">—</b>
-                    <span className="muted">µV</span>
+                    <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
+                    <div id="muse50_0" className="muted muse-line-noise">50 Hz: —</div>
                   </div>
                   <div className="card metric">
                     <small>AF7</small>
                     <b id="ch1">—</b>
-                    <span className="muted">µV</span>
+                    <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
+                    <div id="muse50_1" className="muted muse-line-noise">50 Hz: —</div>
                   </div>
                   <div className="card metric">
                     <small>AF8</small>
                     <b id="ch2">—</b>
-                    <span className="muted">µV</span>
+                    <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
+                    <div id="muse50_2" className="muted muse-line-noise">50 Hz: —</div>
                   </div>
                   <div className="card metric">
                     <small>TP10</small>
                     <b id="ch3">—</b>
-                    <span className="muted">µV</span>
+                    <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
+                    <div id="muse50_3" className="muted muse-line-noise">50 Hz: —</div>
                   </div>
                 </div>
                 <canvas id="museCanvas" width="1100" height="220" style={{ marginTop: "14px" }}></canvas>
+                <p className="muted muse-plot-note">กราฟแสดงประมาณ 2 วินาทีล่าสุด โดยหักค่าเฉลี่ยของแต่ละช่องและปรับสเกลอัตโนมัติ ค่าใน CSV ยังเป็นสัญญาณดิบ ไม่ได้กรอง 50 Hz</p>
+                <div id="museNoiseWarning" className="study-signal-warning" role="status" style={{ display: "none" }}></div>
                 <div style={{ marginTop: "12px", background: "#10243b", borderRadius: "10px", overflow: "hidden", height: "12px" }}>
                   <div id="baselineProgress" style={{ height: "100%", width: "0%", background: "#42d9f5", transition: "width .2s linear" }}></div>
                 </div>
