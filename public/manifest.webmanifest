@@ -1,7 +1,7 @@
 {
-  "name": "CogniLoad-XAI Muse 2 Cognitive Assessment",
+  "name": "CogniLoad-XAI Muse EEG Research",
   "short_name": "CogniLoad-XAI",
-  "description": "MMSE-Thai 2002, cognitive games, Muse 2 EEG, dashboard and CSV research prototype.",
+  "description": "Muse 2 EEG research sessions with baseline, task, rest, event markers and CSV export.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

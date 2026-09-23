@@ -1,4 +1,25 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+CogniLoad-XAI is a browser-based Muse 2 / Muse S (Classic protocol) EEG research workspace. The experiment page records four EEG channels (TP9, AF7, AF8, TP10) during a configurable baseline → task → rest sequence and exports one CSV per session.
+
+## Running a study session
+
+1. Sign in with a researcher account. Use Chrome or Edge on a computer or Android device over HTTPS or `localhost`; allow Bluetooth access.
+2. Enter a pseudonymous participant ID, session ID, participant group (`patient` or `control`), condition, choose one of the three web games, and set phase durations. Confirm that consent has been obtained under the study protocol. Use the same game and durations for corresponding sessions in both groups; run another session for another game.
+3. Connect Muse and wait for the **EEG ครบ 4 ช่อง** indicator and live channel values. Research sessions require at least one second of recent data on each channel and block starting if at least 1% of recent samples on any channel reach the ADC limit. For a hardware check, use **ทดสอบอุปกรณ์ 15 วินาที**; the exported CSV will have `test_mode=true` and does not require participant consent or a quality precheck. For a research session, the default durations are 30 s baseline, 60 s task and 30 s rest; total duration is limited to 600 s.
+4. Use **เพิ่ม marker** for additional events. Automatic markers identify session and phase boundaries. The selected game opens automatically at the start of the Task phase and stops at its end. Game markers include game number, trial number, stimulus, response, correctness and reaction time; a game summary marker records total responses, errors and mean reaction time. Repeated clicks on a response are ignored. Leaving the game page during Task, failing to start the selected game, losing the device or one EEG channel, or hiding the tab stops the session and marks it incomplete; the partial recording remains exportable.
+   Reaction time starts when the stimulus appears for Odd or Even and Pattern Drift. For Echo Sequence it starts when the response prompt appears, after the 2.2-second display period.
+5. EEG and markers are saved in browser IndexedDB in short batches during recording. If the tab closes or reloads, the most recent saved batches remain available in **รอบทดลองที่เก็บในเครื่อง** and an unfinished session is marked interrupted. Up to roughly one second of unsaved data can be lost on an abrupt browser or operating-system crash. Export the CSV and check the downloaded file before starting another session. Saved sessions can be exported again; delete them from the browser only after verifying the file. Clearing site data or using another browser/device removes access to locally saved sessions.
+
+The CSV has one header and one row per EEG sample or event marker. Every row includes `study_group`, `game_id` and `protocol_version` (`alz_web_games_v1` for a research session). `timestamp_ms` for EEG is the host-clock estimate from `muse-jsx`, with sample offsets at 256 Hz; event markers use the browser clock. `received_at_ms` records packet arrival time. `relative_ms` is relative to session start. `packet_index` and `sample_index` help identify dropped or reordered packets. The screen shows observed samples per second and estimates missing, duplicated, and reordered packets from the 16-bit Muse packet index independently for each channel. No EEG recording is sent to the server by this workflow.
+
+The screen also warns when at least 1% of samples in a channel reach the Muse ADC limit (about ±1000 µV). This indicates clipped values; the channel needs a contact/fit check before participant recording. For an exported file, run:
+
+```bash
+node scripts/validate-muse-csv.mjs /path/to/muse_recording.csv
+```
+
+The validator prints phase timing, samples per channel, packet gaps, clipping percentages and game trial markers. `unansweredTrials` identifies stimuli without a response, including a trial cut off by the Task deadline; analyze these separately. It reports data integrity and basic signal checks, not clinical EEG quality or an Alzheimer diagnosis.
+
+This is a research prototype; signal display and sample counts do not establish clinical signal quality or a diagnosis. Validate timing and data completeness against your study protocol before collecting participants.
 
 ## Getting Started
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import BleDevicesPanel from "@/app/components/BleDevicesPanel";
+import ResearchSession from "@/app/components/ResearchSession";
 import { TH } from "@/lib/th-dict";
 
 const AUTH_ERRORS = {
@@ -255,7 +255,11 @@ export default function Home() {
       correct = 0,
       total = 0,
       errors = 0,
-      rts = [];
+      rts = [],
+      currentFreeGame = 0,
+      currentTrial = 0,
+      acceptingResponse = false,
+      gameRunId = 0;
     function setMetrics() {
       let a = total ? Math.round((correct / total) * 100) : 0;
       $("gacc").textContent = a + "%";
@@ -267,57 +271,97 @@ export default function Home() {
         $("gvar").textContent = Math.round(sd) + " ms";
       } else $("gvar").textContent = "—";
     }
+    function emitTaskMarker(label) {
+      window.dispatchEvent(new CustomEvent("research-task-marker", { detail: { label } }));
+    }
     function startGame(n) {
+      if (window.__studyPhase && window.__studyPhase !== "task") {
+        alert("เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase");
+        return;
+      }
+      if (window.__studyPhase === "task" && window.__studyGameId !== n) {
+        alert("รอบทดลองนี้กำหนดเกมอื่นไว้ กรุณาใช้เกมที่เลือกก่อนเริ่มบันทึก");
+        return;
+      }
+      if (window.__studyPhase === "task" && currentFreeGame) return;
+      const runId = ++gameRunId;
+      currentFreeGame = n;
+      currentTrial = 0;
+      acceptingResponse = false;
       correct = 0;
       total = 0;
       errors = 0;
       rts = [];
       setMetrics();
-      if (n === 1) game1();
-      if (n === 2) game2();
-      if (n === 3) game3();
+      emitTaskMarker(`game_${n}_start`);
+      if (n === 1) game1(runId);
+      if (n === 2) game2(runId);
+      if (n === 3) game3(runId);
     }
-    function game1() {
-      $("gtitle").textContent = "Context Switch Trail / บริบทสลับเส้นทาง";
+    let game1Truth = "";
+    function game1(runId) {
+      if (currentFreeGame !== 1 || runId !== gameRunId) return;
+      currentTrial++;
+      $("gtitle").textContent = "Odd or Even / คี่หรือคู่";
       let box = $("gamebox");
-      let rule = Math.random() > 0.5 ? "ODD" : "EVEN",
-        num = Math.ceil(Math.random() * 9);
-      box.innerHTML = `<div style="text-align:center"><p>Rule / กติกา: <b>${rule}</b></p><div style="font-size:70px">${num}</div><button onclick="answer1(${num % 2 === 1},'${rule}')">ODD</button> <button class="secondary" onclick="answer1(${num % 2 === 0},'${rule}')">EVEN</button></div>`;
+      let num = Math.ceil(Math.random() * 9);
+      game1Truth = num % 2 === 1 ? "ODD" : "EVEN";
+      box.innerHTML = `<div style="text-align:center"><p>Odd or even? / คี่หรือคู่?</p><div style="font-size:70px">${num}</div><button onclick="answer1('ODD')">ODD / คี่</button> <button class="secondary" onclick="answer1('EVEN')">EVEN / คู่</button></div>`;
       timerStart = performance.now();
+      acceptingResponse = true;
+      emitTaskMarker(`game_1_trial_${currentTrial}_stimulus_${num}`);
     }
-    function answer1(isOdd, rule) {
-      let chosen = event.target.textContent.trim(),
-        truth = rule === "ODD" ? "ODD" : "EVEN";
+    function answer1(chosen) {
+      if (currentFreeGame !== 1 || !acceptingResponse) return;
+      acceptingResponse = false;
       total++;
-      let ok = chosen === truth;
+      let ok = chosen === game1Truth;
       if (ok) correct++;
       else errors++;
-      rts.push(performance.now() - timerStart);
+      const rt = Math.round(performance.now() - timerStart);
+      rts.push(rt);
+      emitTaskMarker(`game_1_trial_${currentTrial}_response_${chosen}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
       setMetrics();
-      setTimeout(game1, 250);
+      const runId = gameRunId;
+      setTimeout(() => game1(runId), 250);
     }
     let seq = [];
-    function game2() {
+    function game2(runId) {
+      if (currentFreeGame !== 2 || runId !== gameRunId) return;
+      currentTrial++;
+      acceptingResponse = false;
       $("gtitle").textContent = "Echo Sequence / ลำดับสะท้อน";
       let box = $("gamebox");
       seq = Array.from({ length: 4 }, () => 1 + Math.floor(Math.random() * 6));
       box.innerHTML = `<div style="text-align:center"><p>Remember / จำลำดับ</p><div style="font-size:45px;letter-spacing:20px">${seq.join(" ")}</div></div>`;
+      emitTaskMarker(`game_2_trial_${currentTrial}_stimulus_${seq.join("")}`);
       setTimeout(() => {
-        box.innerHTML = `<div><p>Enter sequence / ใส่ลำดับ</p><input id="seqin" placeholder="e.g. 1 3 5 2"><button onclick="answer2()">Submit</button></div>`;
+        if (currentFreeGame !== 2 || runId !== gameRunId) return;
+        box.innerHTML = `<div><p>Enter sequence / ใส่ลำดับ</p><input id="seqin" inputmode="numeric" maxlength="16" placeholder="e.g. 1 3 5 2"><button onclick="answer2()">Submit</button></div>`;
         timerStart = performance.now();
+        acceptingResponse = true;
+        emitTaskMarker(`game_2_trial_${currentTrial}_response_prompt`);
       }, 2200);
     }
     function answer2() {
-      let v = $("seqin").value.replace(/\s/g, ""),
+      if (currentFreeGame !== 2 || !acceptingResponse) return;
+      acceptingResponse = false;
+      let v = $("seqin").value.replace(/\s/g, "").slice(0, 16).replace(/[^0-9]/g, ""),
         truth = seq.join("");
       total++;
-      if (v === truth) correct++;
+      const ok = v === truth;
+      if (ok) correct++;
       else errors++;
-      rts.push(performance.now() - timerStart);
+      const rt = Math.round(performance.now() - timerStart);
+      rts.push(rt);
+      emitTaskMarker(`game_2_trial_${currentTrial}_response_${v || "empty"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
       setMetrics();
-      setTimeout(game2, 400);
+      const runId = gameRunId;
+      setTimeout(() => game2(runId), 400);
     }
-    function game3() {
+    function game3(runId) {
+      if (currentFreeGame !== 3 || runId !== gameRunId) return;
+      currentTrial++;
       $("gtitle").textContent = "Pattern Drift / รูปแบบเปลี่ยนแปลง";
       let box = $("gamebox"),
         change = Math.random() > 0.5;
@@ -327,15 +371,44 @@ export default function Home() {
       if (change) b[2] = "⬟";
       box.innerHTML = `<div style="text-align:center"><p>Did the pattern change? / รูปแบบเปลี่ยนหรือไม่?</p><div style="font-size:40px">${a.join(" ")}</div><div style="font-size:40px;margin:15px">${b.join(" ")}</div><button onclick="answer3(${change},true)">Changed</button> <button class="secondary" onclick="answer3(${change},false)">Same</button></div>`;
       timerStart = performance.now();
+      acceptingResponse = true;
+      emitTaskMarker(`game_3_trial_${currentTrial}_stimulus_${change ? "changed" : "same"}`);
     }
     function answer3(truth, choice) {
+      if (currentFreeGame !== 3 || !acceptingResponse) return;
+      acceptingResponse = false;
       total++;
-      if (truth === choice) correct++;
+      const ok = truth === choice;
+      if (ok) correct++;
       else errors++;
-      rts.push(performance.now() - timerStart);
+      const rt = Math.round(performance.now() - timerStart);
+      rts.push(rt);
+      emitTaskMarker(`game_3_trial_${currentTrial}_response_${choice ? "changed" : "same"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
       setMetrics();
-      setTimeout(game3, 300);
+      const runId = gameRunId;
+      setTimeout(() => game3(runId), 300);
     }
+    const onResearchTaskEnded = () => {
+      if (currentFreeGame && window.__studyPhase === "task") {
+        const meanRt = rts.length ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : 0;
+        emitTaskMarker(`game_${currentFreeGame}_end_trials_${total}_correct_${correct}_errors_${errors}_mean_rt_${meanRt}ms`);
+      }
+      currentFreeGame = 0;
+      acceptingResponse = false;
+      gameRunId++;
+      const box = $("gamebox");
+      if (box) box.innerHTML = '<span class="muted">Task phase finished / สิ้นสุดช่วงภารกิจ</span>';
+    };
+    const onResearchTaskStart = (event) => {
+      const selectedGame = Number(event.detail?.gameId);
+      if (![1, 2, 3].includes(selectedGame)) return;
+      showSection("games");
+      startGame(selectedGame);
+    };
+    window.addEventListener("research-task-ended", onResearchTaskEnded);
+    window.addEventListener("research-task-start", onResearchTaskStart);
+    const onResearchSessionFinished = () => showSection("journey");
+    window.addEventListener("research-session-finished", onResearchSessionFinished);
 
     /* ---------- Auth / journey ---------- */
     let journey = { step: 1, profile: {}, screen: null, games: [] };
@@ -376,6 +449,8 @@ export default function Home() {
       setAuthed(false);
     }
     async function logoutUser() {
+      if (window.__studyUnexported && !window.confirm("มีข้อมูลการทดลองที่ยังไม่ได้ส่งออก ต้องการออกจากระบบหรือไม่?")) return;
+      if (museConnected) await disconnectMuse();
       try {
         await fetch("/api/auth/logout", { method: "POST" });
       } catch {}
@@ -761,6 +836,10 @@ export default function Home() {
         ? "● Connected" + (deviceName ? ": " + deviceName : "") + " / เชื่อมต่อแล้ว"
         : "● Not connected / ยังไม่เชื่อมต่อ";
       s.style.background = on ? "#123c2b" : "#0a3140";
+      if (!on) {
+        window.__museReady = false;
+        window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: false } }));
+      }
     }
     function renderMuse() {
       for (let ch = 0; ch < 4; ch++) {
@@ -885,7 +964,7 @@ export default function Home() {
       try {
         await loadMuseDriver();
         b.disabled = false;
-        b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
+        b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         setMuseStatus("Ready / พร้อมเชื่อมต่อ");
       } catch (e) {
         b.disabled = false;
@@ -906,6 +985,7 @@ export default function Home() {
           const electrode = Number(reading.electrode);
           const samples = Array.isArray(reading.samples) ? reading.samples : [];
           if (electrode >= 0 && electrode < 4 && samples.length) {
+            window.dispatchEvent(new CustomEvent("muse-study-reading", { detail: reading }));
             latest[electrode] = samples[samples.length - 1];
             samples.forEach((v) => {
               if (Number.isFinite(v)) {
@@ -918,14 +998,18 @@ export default function Home() {
             });
             if (!firstPacket) {
               firstPacket = true;
+              window.__museReady = true;
+              window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: true } }));
               setStage("eeg");
-              setMuseStatus("4/4 Connected + EEG streaming / เชื่อมต่อและรับ EEG แล้ว");
+              setMuseStatus("Connected + EEG streaming / เชื่อมต่อและเริ่มรับ EEG แล้ว");
               getEl("baselineBtn").disabled = false;
             }
           }
           renderMuse();
         },
         error: (err) => {
+          window.__museReady = false;
+          window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: false } }));
           setMuseStatus("EEG stream error: " + (err?.message || err), true);
           getEl("baselineBtn").disabled = true;
         },
@@ -970,13 +1054,13 @@ export default function Home() {
         museConnected = false;
         setMuseConnected(false);
         b.disabled = false;
-        b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
+        b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         const n = err?.name || "Error",
           m = err?.message || String(err);
         if (quiet) setMuseStatus("Auto-reconnect ไม่สำเร็จ (" + (device?.name || "Muse") + " อาจปิดอยู่) — กด Connect หรือเลือกจากรายการด้านบน", true);
         else if (n === "NotFoundError") setMuseStatus("ไม่พบอุปกรณ์ " + label + " กรุณาเปิดเครื่องแล้วลองใหม่", true);
         else if (n === "NetworkError")
-          setMuseStatus("เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse 2 แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry", true);
+          setMuseStatus("เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry", true);
         else if (n === "SecurityError" || n === "NotAllowedError")
           setMuseStatus("เบราว์เซอร์ไม่อนุญาต Bluetooth — เปิดเว็บผ่าน HTTPS/localhost และอนุญาตสิทธิ์ Bluetooth แล้วลองใหม่", true);
         else setMuseStatus("Muse connection error: " + n + " — " + m, true);
@@ -1028,7 +1112,7 @@ export default function Home() {
       const b = getEl("connectMuseBtn");
       b.disabled = true;
       b.textContent = "Select Muse-xxxx… / เลือก Muse…";
-      setMuseStatus("1/4 เลือกอุปกรณ์ Muse-xxxx ในหน้าต่าง Bluetooth");
+      setMuseStatus("1/4 เลือกอุปกรณ์ Muse หรือ MuseS ในหน้าต่าง Bluetooth");
       let device = null;
       try {
         device = await navigator.bluetooth.requestDevice({
@@ -1040,8 +1124,8 @@ export default function Home() {
         });
       } catch (err) {
         b.disabled = false;
-        b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
-        if (err?.name === "NotFoundError") setMuseStatus("ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse 2 กรุณากด Connect แล้วเลือก Muse-xxxx", true);
+        b.textContent = "Connect Muse / เชื่อมต่อ Muse";
+        if (err?.name === "NotFoundError") setMuseStatus("ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse กรุณากด Connect แล้วเลือก Muse หรือ MuseS", true);
         else setMuseStatus("Device selection error: " + (err?.name || "Error") + " — " + (err?.message || err), true);
         return;
       }
@@ -1065,9 +1149,10 @@ export default function Home() {
       } catch (e) {}
       museClient = null;
       museConnected = false;
+      setMuseConnected(false);
       const b = getEl("connectMuseBtn");
       b.disabled = false;
-      b.textContent = "Connect Muse 2 / เชื่อมต่อ Muse 2";
+      b.textContent = "Connect Muse / เชื่อมต่อ Muse";
       getEl("disconnectMuseBtn").disabled = true;
       getEl("baselineBtn").disabled = true;
       getEl("stopBaselineBtn").disabled = true;
@@ -1171,6 +1256,10 @@ export default function Home() {
 
     /* ---------- Section navigation ---------- */
     function showSection(id) {
+      if (window.__studyPhase === "task" && id !== "games") {
+        window.dispatchEvent(new Event("research-task-screen-left"));
+        return;
+      }
       document.querySelectorAll("main section").forEach((s) => s.classList.toggle("active", s.id === id));
       const nav = document.getElementById("mainNav");
       if (nav) nav.querySelectorAll("[data-sec]").forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
@@ -1244,6 +1333,9 @@ export default function Home() {
       stopBaselineBtn.removeEventListener("click", onStopBaselineClick);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("research-task-ended", onResearchTaskEnded);
+      window.removeEventListener("research-task-start", onResearchTaskStart);
+      window.removeEventListener("research-session-finished", onResearchSessionFinished);
       if (installBtn) installBtn.removeEventListener("click", onInstallClick);
     };
   }, []);
@@ -1285,7 +1377,7 @@ export default function Home() {
           <p className="muted" style={{ margin: "4px 0 0" }}>Cognitive Assessment System / ระบบประเมินการรู้คิด</p>
           <div className="auth-card">
             <h2 id="authTitle">{mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Register / สมัครสมาชิก"}</h2>
-            <p className="muted">Research participant portal / ระบบสำหรับผู้เข้าร่วมการวิจัย</p>
+            <p className="muted">Research workspace / ระบบสำหรับผู้วิจัย</p>
             <div className="auth-tabs">
               <button type="button" className={"auth-tab" + (mode === "login" ? " active" : "")} onClick={() => switchMode("login")}>
                 Sign in
@@ -1367,12 +1459,12 @@ export default function Home() {
             <div id="authMsg" className="muted" style={authError ? { color: "#ff8b8b" } : undefined} aria-live="polite">
               {authMessage ||
                 (mode === "register"
-                  ? "สมัครสมาชิกเพื่อเริ่มการประเมิน / Create an account to start the assessment."
+                  ? "สมัครสมาชิกเพื่อเริ่มการทดลอง / Create an account to start the study."
                   : "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one.")}
             </div>
           </div>
           <p className="auth-foot">
-            📶 เชื่อมต่ออุปกรณ์ Muse 2 EEG ทำได้ในหน้าหลัก หลังเข้าสู่ระบบ / Connect the Muse 2 EEG device on the main page after sign-in.
+            📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
           </p>
         </div>
       </div>
@@ -1384,7 +1476,7 @@ export default function Home() {
             CogniLoad<span>-XAI</span>
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <div className="badge">EEG Cognitive Workload Research Prototype</div>
+            <div className="badge" id="studyLiveBadge">Muse EEG Research Workspace</div>
             <button className="secondary" id="langBtn" onClick={() => call("toggleLang")}>
               ไทย
             </button>
@@ -1397,17 +1489,9 @@ export default function Home() {
         <div className="wrap">
           <nav className="mainnav" id="mainNav">
             {[
-              ["journey", "🧭 Journey / เส้นทาง"],
-              ["dashboard", "📊 Dashboard / แดชบอร์ด"],
-              ["history", "🕘 History / ประวัติ"],
-              ["cogscreen", "🧠 Screening / คัดกรอง"],
-              ["games", "🎮 Games / เกม"],
-              ["participant", "👤 Participant / ผู้เข้าร่วม"],
-              ["acquisition", "📶 EEG Lab"],
-              ["preprocess", "⚙️ Preprocess / ประมวลผล"],
-              ["features", "📈 Features / คุณลักษณะ"],
-              ["models", "🤖 Models / โมเดล"],
-              ["xai", "💡 XAI"],
+              ["journey", "🔬 Experiment / การทดลอง"],
+              ["games", "🎮 Tasks / ภารกิจ"],
+              ["history", "🕘 Assessment history / ประวัติเดิม"],
             ].map(([sec, label]) => (
               <button key={sec} data-sec={sec} className={sec === "journey" ? "active" : ""} onClick={() => call("showSection", sec)}>
                 {label}
@@ -1419,14 +1503,14 @@ export default function Home() {
             <section id="journey" className="active">
               <div className="hero">
                 <div>
-                  <h1>Assessment Journey / ลำดับการประเมิน</h1>
-                  <p>Complete each assessment in order. A summary is shown only after all stages are completed.</p>
+                  <span className="study-kicker">COGNILOAD · MUSE EEG</span>
+                  <h1>ห้องทดลอง EEG</h1>
+                  <p>ตั้งค่ารอบทดลอง เชื่อมต่อ Muse บันทึกสัญญาณจริง และส่งออกข้อมูลพร้อม marker</p>
                 </div>
-                <button className="secondary" onClick={() => call("logoutUser")}>
-                  Logout / ออกจากระบบ
-                </button>
+                <span className="pill">Research use · ไม่ใช่การวินิจฉัย</span>
               </div>
-              <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)" }}>
+              <ResearchSession />
+              <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)", display: "none" }}>
                 <div className="card metric">
                   <small>1</small>
                   <b style={{ fontSize: "16px" }}>Profile</b>
@@ -1467,7 +1551,7 @@ export default function Home() {
               <div className="card" style={{ marginTop: "14px" }}>
                 <div className="hero">
                   <div>
-                    <h3 style={{ marginBottom: "6px" }}>Muse 2 EEG / ระบบเชื่อมต่อคลื่นสมอง</h3>
+                    <h3 style={{ marginBottom: "6px" }}>03 · Muse EEG / ตรวจสัญญาณสด</h3>
                     <p className="muted">Web Bluetooth · TP9, AF7, AF8, TP10 · 256 Hz</p>
                   </div>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -1481,7 +1565,7 @@ export default function Home() {
                 </div>
                 <div className="controls">
                   <button id="connectMuseBtn" type="button" style={{ fontSize: "17px", padding: "14px 22px" }}>
-                    Connect Muse 2 &amp; Start Assessment / เชื่อมต่อและเริ่มประเมิน
+                    Connect Muse / เชื่อมต่อ Muse
                   </button>
 
                   <button id="disconnectMuseBtn" className="secondary" type="button" disabled>
@@ -1510,7 +1594,7 @@ export default function Home() {
                   </span>
                 </div>
                 <div className="muted" style={{ marginTop: "8px" }}>
-                  เปิด Muse 2 → กด Connect Muse 2 → เลือก <b>Muse-xxxx</b> จากหน้าต่าง Bluetooth ที่เด้งขึ้นมา → เมื่อขึ้น “Connected + EEG streaming” จึงเริ่ม Baseline 30 วินาที
+                  เปิด Muse → กด Connect Muse → เลือก <b>Muse หรือ MuseS</b> ในหน้าต่าง Bluetooth → รอให้สถานะแสดง “EEG ครบ 4 ช่อง” ก่อนเริ่มบันทึก
                 </div>
 
                 <div id="installBox" className="notice" style={{ display: "none" }}>
@@ -1563,8 +1647,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-              <BleDevicesPanel />
-              <div id="stepbox" className="card" style={{ marginTop: "14px" }}></div>
+              <details className="study-legacy"><summary>เครื่องมือประเมินเดิม / Existing assessment tools</summary><div id="stepbox" className="card" style={{ marginTop: "14px" }}></div></details>
             </section>
 
             {/* ---------- Dashboard ---------- */}
@@ -1849,14 +1932,15 @@ export default function Home() {
             {/* ---------- Games ---------- */}
             <section id="games">
               <h1>Experimental Cognitive Games / เกมประเมินการรู้คิดเชิงทดลอง</h1>
+              <p className="muted">หากกำลังบันทึก EEG ระบบจะใส่ marker อัตโนมัติเมื่อแสดงสิ่งเร้าและเมื่อผู้เข้าร่วมตอบแต่ละครั้ง ตรวจเวลาของช่วงทดลองได้ที่แถบด้านบน</p>
               <p className="notice">
                 These three tasks are newly designed experimental paradigms for this prototype. They are not validated Alzheimer diagnostic tests. Research validation is required
                 before clinical interpretation.
               </p>
               <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
                 <div className="card">
-                  <h3>1. Context Switch Trail</h3>
-                  <p className="muted">บริบทสลับเส้นทาง: ทดสอบ working memory, rule switching และ response inhibition</p>
+                  <h3>1. Odd or Even / คี่หรือคู่</h3>
+                  <p className="muted">ตัดสินความคี่คู่ของตัวเลข บันทึกความถูกต้องและเวลาตอบสนอง</p>
                   <button onClick={() => call("startGame", 1)}>Start / เริ่ม</button>
                 </div>
                 <div className="card">
