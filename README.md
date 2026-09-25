@@ -11,6 +11,8 @@ CogniLoad-XAI is a browser-based Muse 2 / Muse S (Classic protocol) EEG research
 
 The CSV has one header and one row per EEG sample or event marker. Every row includes `study_group`, `game_id` and `protocol_version` (`alz_web_games_v1` for a research session). `timestamp_ms` for EEG is the host-clock estimate from `muse-jsx`, with sample offsets at 256 Hz; event markers use the browser clock. `received_at_ms` records packet arrival time. `relative_ms` is relative to session start. `packet_index` and `sample_index` help identify dropped or reordered packets. The screen shows observed samples per second and estimates missing, duplicated, and reordered packets from the 16-bit Muse packet index independently for each channel. No EEG recording is sent to the server by this workflow.
 
+The **Dashboard** tab reads completed research recordings from the browser's IndexedDB. Its bar chart compares EEG sample counts across TP9, AF7, AF8 and TP10 for the latest completed session. The pie chart shows that session's actual baseline, task and post-task durations. The line chart tracks average samples per second per channel across up to 12 completed sessions. Device-check and interrupted recordings are excluded. The older assessment overview remains available in a collapsible section below the EEG charts.
+
 The screen also warns when at least 1% of samples in a channel reach the Muse ADC limit (about ±1000 µV). This indicates clipped values; the channel needs a contact/fit check before participant recording. For an exported file, run:
 
 ```bash

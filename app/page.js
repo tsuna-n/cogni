@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ResearchSession from "@/app/components/ResearchSession";
+import ResearchDashboard from "@/app/components/ResearchDashboard";
 import { LINE_WINDOW_SAMPLES, summarizeEegWindow } from "@/lib/eeg-signal-quality.mjs";
 import { TH } from "@/lib/th-dict";
 
@@ -1304,6 +1305,7 @@ export default function Home() {
       document.querySelectorAll("main section").forEach((s) => s.classList.toggle("active", s.id === id));
       const nav = document.getElementById("mainNav");
       if (nav) nav.querySelectorAll("[data-sec]").forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
+      if (id === "dashboard") window.dispatchEvent(new Event("research-dashboard-opened"));
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -1532,6 +1534,7 @@ export default function Home() {
           <nav className="mainnav" id="mainNav">
             {[
               ["journey", "🔬 Experiment / การทดลอง"],
+              ["dashboard", "📊 Dashboard / แดชบอร์ด"],
               ["games", "🎮 Tasks / ภารกิจ"],
               ["history", "🕘 Assessment history / ประวัติเดิม"],
             ].map(([sec, label]) => (
@@ -1703,10 +1706,13 @@ export default function Home() {
               <div className="hero">
                 <div>
                   <h1>Research Dashboard / แดชบอร์ด</h1>
-                  <p>Member login history, assessment status, cognitive screening and game-performance overview.</p>
+                  <p>ภาพรวมข้อมูล EEG จากรอบทดลองที่บันทึกในเบราว์เซอร์นี้</p>
                 </div>
-                <button onClick={() => call("exportCSV")}>Export CSV</button>
               </div>
+              <ResearchDashboard />
+              <details className="study-legacy">
+                <summary>ผลแบบประเมินเดิม / Existing assessment overview</summary>
+                <div className="controls"><button onClick={() => call("exportCSV")}>Export assessment CSV</button></div>
               <div id="dashRisk" className="risk-banner">
                 Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง
               </div>
@@ -1761,6 +1767,7 @@ export default function Home() {
                   </p>
                 </div>
               </div>
+              </details>
             </section>
 
             {/* ---------- Participant ---------- */}
