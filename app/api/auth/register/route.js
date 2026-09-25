@@ -2,11 +2,22 @@ import { hashPassword } from "@/lib/auth/password";
 import { clientKey, rateLimit } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { createUser, findUser, isStorageError } from "@/lib/auth/store";
+import { registrationEnabled } from "@/lib/server-config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(request) {
-  const limit = rateLimit(clientKey(request, "register"), 8, 60_000);
+  try {
+    return await register(request);
+  } catch (error) {
+    if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    throw error;
+  }
+}
+
+async function register(request) {
+  if (!registrationEnabled()) return Response.json({ error: "registration_disabled" }, { status: 403 });
+  const limit = await rateLimit(clientKey(request, "register"), 8, 60_000);
   if (!limit.ok) {
     return Response.json({ error: "rate_limited" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   }

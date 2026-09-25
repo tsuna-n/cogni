@@ -4,7 +4,16 @@ import { createSession } from "@/lib/auth/session";
 import { findUser, isAdminEmail, isStorageError, recordLogin } from "@/lib/auth/store";
 
 export async function POST(request) {
-  const limit = rateLimit(clientKey(request, "login"), 10, 60_000);
+  try {
+    return await login(request);
+  } catch (error) {
+    if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    throw error;
+  }
+}
+
+async function login(request) {
+  const limit = await rateLimit(clientKey(request, "login"), 10, 60_000);
   if (!limit.ok) {
     return Response.json({ error: "rate_limited" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   }
@@ -28,11 +37,7 @@ export async function POST(request) {
     return Response.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
-  try {
-    await recordLogin(email);
-  } catch (err) {
-    if (!isStorageError(err)) throw err;
-  }
+  await recordLogin(email);
   await createSession(email);
   return Response.json({ user: { email, name: user.name || null, role: isAdminEmail(email) ? "admin" : "researcher" } });
 }

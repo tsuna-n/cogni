@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getResearchGameSummaryMarker, listResearchSessions, saveResearchSummary } from "./researchStorage";
 import { parseGameSummaryMarker, summarizeResearchSession } from "@/lib/research-summary.mjs";
+import { isOwnedResearchSession } from "@/lib/research/local-ownership.mjs";
 import ResearchHistory from "./ResearchHistory";
 
 const CHANNELS = ["TP9", "AF7", "AF8", "TP10"];
@@ -26,7 +27,7 @@ function sessionRate(session) {
   return samples > 0 ? samples / 4 / duration : null;
 }
 
-export default function ResearchDashboard({ locale = "th" }) {
+export default function ResearchDashboard({ locale = "th", accountEmail = "" }) {
   const dateLocale = locale === "th" ? "th-TH" : "en-US";
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState("");
@@ -37,7 +38,7 @@ export default function ResearchDashboard({ locale = "th" }) {
   const refresh = useCallback(async () => {
     const requestId = ++refreshId.current;
     try {
-      const saved = await listResearchSessions();
+      const saved = (await listResearchSessions()).filter((session) => isOwnedResearchSession(session, accountEmail));
       if (requestId !== refreshId.current) return;
       setSessions(saved.map((session) => session.summary ? session : { ...session, summary: summarizeResearchSession(session) }));
       setError("");
@@ -64,7 +65,7 @@ export default function ResearchDashboard({ locale = "th" }) {
     } finally {
       if (requestId === refreshId.current) setLoading(false);
     }
-  }, []);
+  }, [accountEmail]);
 
   useEffect(() => {
     refresh();

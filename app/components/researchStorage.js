@@ -61,6 +61,40 @@ export async function listResearchSessions() {
   return request.result.sort((a, b) => b.startedMs - a.startedMs);
 }
 
+export async function claimUnassignedResearchSession(sessionId, ownerEmail) {
+  const owner = String(ownerEmail || "").trim().toLowerCase();
+  if (!owner) throw new Error("An account is required to assign a session");
+  const database = await openResearchDatabase();
+  const transaction = database.transaction("sessions", "readwrite");
+  const done = transactionDone(transaction);
+  const store = transaction.objectStore("sessions");
+  const request = store.get(sessionId);
+  let result = { ok: false, reason: "not_found" };
+  request.onsuccess = () => {
+    const current = request.result;
+    if (!current) return;
+    if (current.ownerEmail || current.serverSyncedBy) {
+      result = { ok: false, reason: "already_assigned" };
+      return;
+    }
+    if (current.status === "recording" && Date.now() - (current.lastPacketMs || current.startedMs || 0) < 60_000) {
+      result = { ok: false, reason: "possibly_active" };
+      return;
+    }
+    const interrupted = current.status === "recording";
+    store.put({
+      ...current,
+      ownerEmail: owner,
+      ...(interrupted ? { status: "interrupted", endedMs: current.lastPacketMs || current.startedMs, summary: null } : {}),
+      serverSyncedAt: null,
+      serverSyncedBy: null,
+    });
+    result = { ok: true };
+  };
+  await done;
+  return result;
+}
+
 export async function getResearchChunks(sessionId) {
   const database = await openResearchDatabase();
   const transaction = database.transaction("chunks", "readonly");

@@ -14,6 +14,7 @@ const COPY = {
     run: "ผู้เข้าร่วม / รอบ",
     group: "กลุ่ม",
     game: "เกม",
+    protocol: "โปรโตคอล",
     status: "สถานะ",
     task: "Task (วินาที)",
     samples: "EEG samples",
@@ -23,6 +24,7 @@ const COPY = {
     available: "เก็บอยู่",
     removed: "ลบแล้ว",
     compare: "เปรียบเทียบผลสรุปสองรอบ",
+    differentProtocol: "สองรอบนี้ใช้คนละโปรโตคอล โปรดตรวจขั้นตอนและเวลาที่ตั้งก่อนตีความผลต่าง",
     first: "รอบอ้างอิง",
     second: "รอบที่เปรียบเทียบ",
     choose: "เลือกรอบ",
@@ -66,6 +68,7 @@ const COPY = {
     run: "Participant / session",
     group: "Group",
     game: "Game",
+    protocol: "Protocol",
     status: "Status",
     task: "Task (seconds)",
     samples: "EEG samples",
@@ -75,6 +78,7 @@ const COPY = {
     available: "Saved",
     removed: "Removed",
     compare: "Compare two session summaries",
+    differentProtocol: "These sessions use different protocols. Check the procedure and planned timing before interpreting differences.",
     first: "Reference session",
     second: "Comparison session",
     choose: "Select a session",
@@ -171,10 +175,10 @@ export default function ResearchHistory({ sessions, locale = "th", loading, back
   const comparable = first && second && first.id !== second.id;
 
   const exportSummaries = () => {
-    const headers = ["record_id", "started_at_iso", "ended_at_iso", "participant_id", "session_id", "study_group", "condition", "game_id", "status", "test_mode", "raw_eeg_removed", "total_seconds", "baseline_seconds", "task_seconds", "rest_seconds", "eeg_samples", "tp9_samples", "af7_samples", "af8_samples", "tp10_samples", "average_hz_per_channel", "clipped_samples", "clipped_percent", "missing_packets", "duplicate_packets", "reordered_packets", "event_markers", "game_trials", "game_correct", "game_errors", "game_accuracy_percent", "mean_reaction_ms"];
+    const headers = ["record_id", "started_at_iso", "ended_at_iso", "participant_id", "session_id", "study_group", "condition", "protocol_version", "game_id", "status", "test_mode", "raw_eeg_removed", "total_seconds", "baseline_seconds", "task_seconds", "rest_seconds", "eeg_samples", "tp9_samples", "af7_samples", "af8_samples", "tp10_samples", "average_hz_per_channel", "clipped_samples", "clipped_percent", "missing_packets", "duplicate_packets", "reordered_packets", "event_markers", "game_trials", "game_correct", "game_errors", "game_accuracy_percent", "mean_reaction_ms"];
     const rows = sessions.map((session) => {
       const summary = session.summary;
-      return [session.id, new Date(summary.startedMs).toISOString(), summary.endedMs ? new Date(summary.endedMs).toISOString() : "", summary.participant, summary.sessionId, summary.studyGroup, summary.condition, summary.gameId || "", summary.status, summary.testMode, source === "server" ? "" : Boolean(session.rawDeleted), summary.durationSeconds, summary.baselineSeconds, summary.taskSeconds, summary.restSeconds, summary.samples, ...summary.channelSamples, summary.averageHzPerChannel, summary.clippedSamples, summary.clippedPercent, summary.missingPackets, summary.duplicatePackets, summary.reorderedPackets, summary.markers, summary.game?.trials, summary.game?.correct, summary.game?.errors, summary.game?.accuracyPercent, summary.game?.meanRtMs].map(csvCell).join(",");
+      return [session.id, new Date(summary.startedMs).toISOString(), summary.endedMs ? new Date(summary.endedMs).toISOString() : "", summary.participant, summary.sessionId, summary.studyGroup, summary.condition, summary.protocolVersion || "", summary.gameId || "", summary.status, summary.testMode, source === "server" ? "" : Boolean(session.rawDeleted), summary.durationSeconds, summary.baselineSeconds, summary.taskSeconds, summary.restSeconds, summary.samples, ...summary.channelSamples, summary.averageHzPerChannel, summary.clippedSamples, summary.clippedPercent, summary.missingPackets, summary.duplicatePackets, summary.reorderedPackets, summary.markers, summary.game?.trials, summary.game?.correct, summary.game?.errors, summary.game?.accuracyPercent, summary.game?.meanRtMs].map(csvCell).join(",");
     });
     const blob = new Blob(["\ufeff", headers.join(","), "\r\n", rows.join("\r\n"), "\r\n"], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -193,9 +197,9 @@ export default function ResearchHistory({ sessions, locale = "th", loading, back
     {backfilling > 0 && <p className="muted" role="status">{copy.backfilling}: {backfilling}</p>}
     {!sessions.length ? <p className="card research-history-empty">{loading ? copy.loading : copy.empty}</p> : <>
       <div className="research-history-scroll"><table className="research-history-table">
-        <thead><tr><th>{copy.date}</th><th>{copy.run}</th><th>{copy.group}</th><th>{copy.game}</th><th>{copy.status}</th><th>{copy.task}</th><th>{copy.samples}</th><th>{copy.rate}</th><th>{copy.accuracy}</th><th>{copy.raw}</th></tr></thead>
+        <thead><tr><th>{copy.date}</th><th>{copy.run}</th><th>{copy.group}</th><th>{copy.protocol}</th><th>{copy.game}</th><th>{copy.status}</th><th>{copy.task}</th><th>{copy.samples}</th><th>{copy.rate}</th><th>{copy.accuracy}</th><th>{copy.raw}</th></tr></thead>
         <tbody>{sessions.map((session) => <tr key={session.id}>
-          <td>{new Date(session.startedMs).toLocaleString(dateLocale)}</td><td><strong>{session.participant || "—"}</strong><br />{session.sessionId || "—"}</td><td>{groupName(session)}</td><td>{gameName(session)}</td><td>{statusName(session)}</td>
+          <td>{new Date(session.startedMs).toLocaleString(dateLocale)}</td><td><strong>{session.participant || "—"}</strong><br />{session.sessionId || "—"}</td><td>{groupName(session)}</td><td>{session.summary.protocolVersion || "—"}</td><td>{gameName(session)}</td><td>{statusName(session)}</td>
           <td>{number(session.summary.taskSeconds, 1, locale)}</td><td>{number(session.summary.samples, 0, locale)}</td><td>{number(session.summary.averageHzPerChannel, 1, locale)}</td><td>{number(session.summary.game?.accuracyPercent, 1, locale)}{session.summary.game?.accuracyPercent != null ? "%" : ""}</td><td>{source === "server" ? (locale === "th" ? "อยู่ในเครื่องผู้วิจัย" : "Researcher's device") : session.rawDeleted ? copy.removed : copy.available}</td>
         </tr>)}</tbody>
       </table></div>
@@ -205,6 +209,7 @@ export default function ResearchHistory({ sessions, locale = "th", loading, back
           <label>{copy.first}<select value={firstId} onChange={(event) => setFirstId(event.target.value)}><option value="">{copy.choose}</option>{sessions.map((session) => <option key={session.id} value={session.id}>{optionLabel(session)}</option>)}</select></label>
           <label>{copy.second}<select value={secondId} onChange={(event) => setSecondId(event.target.value)}><option value="">{copy.choose}</option>{sessions.map((session) => <option key={session.id} value={session.id}>{optionLabel(session)}</option>)}</select></label>
         </div>
+        {comparable && first.summary.protocolVersion && second.summary.protocolVersion && first.summary.protocolVersion !== second.summary.protocolVersion && <p className="study-signal-warning" role="status">{copy.differentProtocol} ({first.summary.protocolVersion} / {second.summary.protocolVersion})</p>}
         {comparable ? <div className="research-history-scroll"><table className="research-history-table research-compare-table"><thead><tr><th>{copy.metric}</th><th>{copy.first}</th><th>{copy.second}</th><th>{copy.difference}</th></tr></thead><tbody>
           {METRICS.map(([label, path, digits]) => {
             const left = valueAt(first.summary, path);

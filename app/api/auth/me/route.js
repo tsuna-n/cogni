@@ -1,7 +1,16 @@
 import { getSession } from "@/lib/auth/session";
-import { findUser, isAdminEmail } from "@/lib/auth/store";
+import { findUser, isAdminEmail, isStorageError } from "@/lib/auth/store";
 
 export async function GET() {
+  try {
+    return await getCurrentUser();
+  } catch (error) {
+    if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    throw error;
+  }
+}
+
+async function getCurrentUser() {
   const session = await getSession();
   if (!session) {
     return Response.json({ user: null }, { status: 401 });

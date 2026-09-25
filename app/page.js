@@ -11,13 +11,14 @@ const AUTH_ERRORS = {
   invalid_email: "รูปแบบอีเมลไม่ถูกต้อง / Invalid email address",
   weak_password: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร / Password must be at least 8 characters",
   email_taken: "อีเมลนี้ถูกใช้แล้ว / This email is already registered",
+  registration_disabled: "ระบบปิดการสมัครสมาชิก กรุณาติดต่อผู้ดูแล / Registration is closed. Contact the administrator.",
   invalid_name: "ชื่อยาวเกินไป (สูงสุด 80 ตัวอักษร) / Name is too long (max 80 characters)",
   invalid_credentials: "อีเมลหรือรหัสผ่านไม่ถูกต้อง / Incorrect email or password",
   missing_credentials: "กรุณากรอกอีเมลและรหัสผ่าน / Enter email and password",
   rate_limited: "พยายามหลายครั้งเกินไป กรุณารอสักครู่ / Too many attempts, please wait a moment",
   invalid_body: "ข้อมูลไม่ถูกต้อง / Invalid request",
   storage_unavailable:
-    "เซิร์ฟเวอร์บันทึกบัญชีไม่ได้ (พื้นที่จัดเก็บเป็นแบบอ่านอย่างเดียว) — ต้องตั้งค่าฐานข้อมูลหรือ deploy บนเซิร์ฟเวอร์ที่เขียนไฟล์ได้ / Server cannot store accounts (read-only filesystem) — configure a database or deploy on a writable server",
+    "พื้นที่จัดเก็บของเซิร์ฟเวอร์ไม่พร้อมใช้งาน กรุณาตรวจการเชื่อมต่อฐานข้อมูลหรือพื้นที่จัดเก็บ / Server storage is unavailable. Check the database connection or storage.",
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -39,6 +40,8 @@ export default function Home() {
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [appConfig, setAppConfig] = useState(null);
+  const [configError, setConfigError] = useState("");
   const alertUser = (message) => window.alert(localizeText(message, localeRef.current));
 
   useEffect(() => {
@@ -46,6 +49,33 @@ export default function Home() {
     const saved = localStorage.getItem("cogni_locale");
     setLocale(saved === "th" || saved === "en" ? saved : navigator.language.toLowerCase().startsWith("th") ? "th" : "en");
     return () => localizationRef.current?.stop();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadConfig = () => {
+      fetch("/api/config", { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }).then((config) => {
+        if (!active) return;
+        setAppConfig(config);
+        if (!config.registrationEnabled) setMode("login");
+        setConfigError("");
+      }).catch((error) => {
+        if (!active) return;
+        setAppConfig(null);
+        setConfigError(`โหลดการตั้งค่าไม่ได้ / Cannot load settings (${error.message})`);
+      });
+    };
+    loadConfig();
+    window.addEventListener("focus", loadConfig);
+    window.addEventListener("study-config-updated", loadConfig);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadConfig);
+      window.removeEventListener("study-config-updated", loadConfig);
+    };
   }, []);
 
   useEffect(() => {
@@ -64,7 +94,7 @@ export default function Home() {
   };
 
   const switchMode = (next) => {
-    if (busy || next === mode) return;
+    if (busy || next === mode || (next === "register" && !appConfig?.registrationEnabled)) return;
     setMode(next);
     setPassword("");
     setConfirm("");
@@ -73,6 +103,7 @@ export default function Home() {
 
   const submitAuth = async () => {
     if (busy) return;
+    if (mode === "register" && !appConfig?.registrationEnabled) return;
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedName = fullName.trim();
     if (!trimmedEmail || !password || (mode === "register" && !confirm)) {
@@ -390,7 +421,7 @@ export default function Home() {
       const runId = gameRunId;
       setTimeout(() => game3(runId), 300);
     }
-    const onResearchTaskEnded = () => {
+    const onResearchTaskEnded = (event) => {
       if (currentFreeGame && window.__studyPhase === "task") {
         const meanRt = rts.length ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : 0;
         emitTaskMarker(`game_${currentFreeGame}_end_trials_${total}_correct_${correct}_errors_${errors}_mean_rt_${meanRt}ms`);
@@ -401,7 +432,7 @@ export default function Home() {
       const finishTaskBtn = $("finishTaskBtn");
       if (finishTaskBtn) finishTaskBtn.hidden = true;
       const box = $("gamebox");
-      if (box) box.innerHTML = '<span class="muted">กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก 30 วินาที / Recording 30 more seconds</span>';
+      if (box) box.textContent = event.detail?.restSeconds ? `กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก ${event.detail.restSeconds} วินาที / Recording ${event.detail.restSeconds} more seconds` : "กิจกรรมสิ้นสุด / Task ended";
     };
     const onResearchTaskStart = (event) => {
       const selectedGame = Number(event.detail?.gameId);
@@ -409,7 +440,10 @@ export default function Home() {
       showSection("games");
       startGame(selectedGame);
       const finishTaskBtn = $("finishTaskBtn");
-      if (finishTaskBtn) finishTaskBtn.hidden = false;
+      if (finishTaskBtn) {
+        finishTaskBtn.textContent = `Finish task · record EEG for ${event.detail.restSeconds} more seconds / จบกิจกรรม · เก็บ EEG ต่อ ${event.detail.restSeconds} วินาที`;
+        finishTaskBtn.hidden = false;
+      }
     };
     const onFinishTaskClick = () => window.dispatchEvent(new Event("research-task-complete"));
     const finishTaskBtn = $("finishTaskBtn");
@@ -1435,9 +1469,7 @@ export default function Home() {
               <button type="button" className={"auth-tab" + (mode === "login" ? " active" : "")} onClick={() => switchMode("login")}>
                 Sign in
               </button>
-              <button type="button" className={"auth-tab" + (mode === "register" ? " active" : "")} onClick={() => switchMode("register")}>
-                Register
-              </button>
+              {appConfig?.registrationEnabled && <button type="button" className={"auth-tab" + (mode === "register" ? " active" : "")} onClick={() => switchMode("register")}>Register</button>}
             </div>
             <form
               onSubmit={(e) => {
@@ -1510,10 +1542,10 @@ export default function Home() {
               </div>
             </form>
             <div id="authMsg" className="muted" style={authError ? { color: "#ff8b8b" } : undefined} aria-live="polite">
-              {authMessage ||
+              {authMessage || configError ||
                 (mode === "register"
                   ? "สมัครสมาชิกเพื่อเริ่มการทดลอง / Create an account to start the study."
-                  : "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one.")}
+                  : appConfig?.registrationEnabled ? "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one." : "ติดต่อผู้ดูแลเพื่อขอบัญชี / Contact the administrator for an account.")}
             </div>
           </div>
           <p className="auth-foot">
@@ -1564,7 +1596,7 @@ export default function Home() {
                 </div>
                 <span className="pill">Research use · ไม่ใช่การวินิจฉัย</span>
               </div>
-              <ResearchSession locale={locale} enabled={authed === true} accountEmail={accountEmail} />
+              <ResearchSession key={accountEmail || "signed-out"} locale={locale} enabled={authed === true} accountEmail={accountEmail} studyConfig={appConfig?.study} configError={configError} />
               <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)", display: "none" }}>
                 <div className="card metric">
                   <small>1</small>
@@ -1712,7 +1744,7 @@ export default function Home() {
             </section>
 
             {/* ---------- Dashboard ---------- */}
-            {isAdmin && <section id="admin"><div className="hero"><div><h1>{locale === "th" ? "จัดการข้อมูลผู้เข้าร่วม" : "Participant data"}</h1><p>{locale === "th" ? "ดูผลสรุปที่ซิงก์จากทุกบัญชีผู้วิจัย" : "View summaries synced by all researcher accounts"}</p></div></div><AdminPanel locale={locale} enabled={authed === true && isAdmin} /></section>}
+            {isAdmin && <section id="admin"><div className="hero"><div><h1>{locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}</h1><p>{locale === "th" ? "ตั้งค่าการทดลองและดูผลสรุปผู้เข้าร่วม" : "Configure the study and review participant summaries"}</p></div></div><AdminPanel locale={locale} enabled={authed === true && isAdmin} /></section>}
 
             <section id="dashboard">
               <div className="hero">
@@ -1721,7 +1753,7 @@ export default function Home() {
                   <p>ภาพรวมข้อมูล EEG จากรอบทดลองที่บันทึกในเบราว์เซอร์นี้</p>
                 </div>
               </div>
-              <ResearchDashboard locale={locale} />
+              <ResearchDashboard key={accountEmail || "signed-out"} locale={locale} accountEmail={accountEmail} />
               <details className="study-legacy">
                 <summary>ผลแบบประเมินเดิม / Existing assessment overview</summary>
                 <div className="controls"><button onClick={() => call("exportCSV")}>Export assessment CSV</button></div>
@@ -2030,7 +2062,7 @@ export default function Home() {
                   >
                     <span className="muted">Choose a game / เลือกเกม</span>
                   </div>
-                  <div className="controls"><button id="finishTaskBtn" type="button" className="secondary" hidden>จบกิจกรรม · เก็บ EEG ต่อ 30 วินาที</button></div>
+                  <div className="controls"><button id="finishTaskBtn" type="button" className="secondary" hidden>จบกิจกรรม · เก็บ EEG ต่อ</button></div>
                 </div>
                 <div className="card">
                   <h3>Digital biomarkers / ตัวชี้วัดดิจิทัล</h3>

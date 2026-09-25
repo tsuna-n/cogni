@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "muse-jsx": "^0.3.1",
     "next": "16.3.5",
     "react": "19.2.8",

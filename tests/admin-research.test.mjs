@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { summarizeResearchSession } from "../lib/research-summary.mjs";
 import { normalizeResearchSubmission, ResearchValidationError } from "../lib/research/validation.js";
 import { listParticipantRecords, listParticipants, saveResearchRecord } from "../lib/research/server-store.js";
+import { createUser, findUser } from "../lib/auth/store.js";
 
 function submission(participant = "P001", sessionId = "S01") {
   const startedMs = Date.now() - 70_000;
@@ -19,6 +20,7 @@ function submission(participant = "P001", sessionId = "S01") {
     sessionId,
     studyGroup: "control",
     condition: "standard",
+    protocolVersion: "pilot_2",
     gameId: 1,
     samples: 1000,
     channels: [250, 250, 250, 250],
@@ -35,8 +37,25 @@ test("validates finalized summaries and rejects inconsistent counts", () => {
   const valid = submission();
   assert.equal(valid.participantId, "P001");
   assert.equal(valid.summary.samples, 1000);
+  assert.equal(valid.summary.protocolVersion, "pilot_2");
   assert.throws(() => normalizeResearchSubmission({ ...valid, summary: { ...valid.summary, samples: 1001 } }), ResearchValidationError);
   assert.throws(() => normalizeResearchSubmission({ ...valid, summary: { ...valid.summary, status: "recording" } }), ResearchValidationError);
+});
+
+test("shared data directory stores researcher accounts and summaries together", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "cogni-shared-data-"));
+  process.env.COGNILOAD_DATA_DIR = directory;
+  try {
+    const email = "study-operator@example.org";
+    await createUser({ email, name: "Study operator", passwordHash: "test-hash" });
+    assert.equal((await findUser(email)).name, "Study operator");
+    assert.equal((await saveResearchRecord(submission(), email)).ok, true);
+    assert.equal(JSON.parse(await readFile(path.join(directory, "users.json"), "utf8"))[email].name, "Study operator");
+    assert.equal(JSON.parse(await readFile(path.join(directory, "research-summaries.json"), "utf8")).records.length, 1);
+  } finally {
+    delete process.env.COGNILOAD_DATA_DIR;
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("stores per-ID summaries and prevents record takeover", async () => {

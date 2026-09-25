@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteResearchSession, getResearchChunks, getResearchGameSummaryMarker, listResearchSessions, markResearchSummarySynced, openResearchDatabase, pruneResearchRawData, saveResearchSession, saveResearchSummary } from "./researchStorage";
+import { claimUnassignedResearchSession, deleteResearchSession, getResearchChunks, getResearchGameSummaryMarker, listResearchSessions, markResearchSummarySynced, openResearchDatabase, pruneResearchRawData, saveResearchSession, saveResearchSummary } from "./researchStorage";
 import { localizeText } from "@/lib/localization";
+import { isOwnedResearchSession, isUnassignedResearchSession } from "@/lib/research/local-ownership.mjs";
 import { parseGameSummaryMarker, summarizeResearchSession } from "@/lib/research-summary.mjs";
 
 const CHANNELS = ["TP9", "AF7", "AF8", "TP10"];
@@ -12,9 +13,6 @@ const PHASES = [
   { key: "rest", label: "Rest / พักหลังงาน" },
 ];
 const SAMPLE_RATE = 256;
-const BASELINE_SECONDS = 30;
-const POST_TASK_SECONDS = 30;
-const PROTOCOL_VERSION = "alz_web_games_v1";
 const GAMES = [
   { id: 1, name: "Odd or Even / คี่หรือคู่" },
   { id: 2, name: "Echo Sequence / ลำดับสะท้อน" },
@@ -31,7 +29,7 @@ function filePart(value) {
   return String(value).trim().replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40) || "unknown";
 }
 
-export default function ResearchSession({ locale = "th", enabled = false, accountEmail = "" }) {
+export default function ResearchSession({ locale = "th", enabled = false, accountEmail = "", studyConfig = null, configError = "" }) {
   const [participant, setParticipant] = useState("");
   const [sessionId, setSessionId] = useState("S01");
   const [studyGroup, setStudyGroup] = useState("");
@@ -50,6 +48,7 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
   const [exported, setExported] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [savedSessions, setSavedSessions] = useState([]);
+  const [showUnassigned, setShowUnassigned] = useState(false);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState("");
@@ -69,6 +68,14 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
   const finishRef = useRef(null);
   const advanceRef = useRef(null);
   const markerRef = useRef(null);
+  const previousDefaultTaskRef = useRef(null);
+
+  useEffect(() => {
+    if (!studyConfig || status !== "idle") return;
+    if (previousDefaultTaskRef.current !== studyConfig.defaultTaskSeconds) setTaskSeconds(studyConfig.defaultTaskSeconds);
+    else setTaskSeconds((current) => Number(current) > studyConfig.maxTaskSeconds ? studyConfig.maxTaskSeconds : current);
+    previousDefaultTaskRef.current = studyConfig.defaultTaskSeconds;
+  }, [studyConfig?.defaultTaskSeconds, studyConfig?.maxTaskSeconds, status]);
 
   function snapshot(data) {
     const { rows, nextSequence, lastIndices, ...saved } = data;
@@ -99,12 +106,13 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
   }
 
   useEffect(() => {
+    if (!accountEmail) return;
     let mounted = true;
     openResearchDatabase().then(listResearchSessions).then((sessions) => {
       if (!mounted) return;
       setStorageReady(true);
       setSavedSessions(sessions);
-      const latest = sessions.find((session) => !session.exported);
+      const latest = sessions.find((session) => isOwnedResearchSession(session, accountEmail) && !session.exported);
       if (latest && !latest.exported) {
         const recovered = { ...latest, rows: [], lastIndices: [null, null, null, null], nextSequence: latest.nextSequence || 0 };
         if (recovered.status === "recording") {
@@ -125,7 +133,7 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
       if (mounted) setMessage(`เปิดที่เก็บข้อมูลไม่ได้: ${error.message}`);
     });
     return () => { mounted = false; };
-  }, []);
+  }, [accountEmail]);
 
   async function syncPending() {
     if (!enabled || !accountEmail) return;
@@ -136,7 +144,7 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
         const sessions = await listResearchSessions();
         const failures = [];
         for (const session of sessions) {
-          if (session.status === "recording" || (session.ownerEmail && session.ownerEmail !== accountEmail) || (session.serverSyncedBy && session.serverSyncedBy !== accountEmail) || (session.serverSyncedAt && session.serverSyncedBy === accountEmail)) continue;
+          if (session.status === "recording" || !isOwnedResearchSession(session, accountEmail) || (session.serverSyncedBy && session.serverSyncedBy !== accountEmail) || (session.serverSyncedAt && session.serverSyncedBy === accountEmail)) continue;
           try {
             let summary = session.summary;
             if (!summary) {
@@ -215,7 +223,7 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
       // The task can end early; keep the exported duration aligned with its markers.
       dataRef.current.durations[1] = Math.round((performance.now() - phaseStartedRef.current)) / 1000;
     }
-    if (phaseRef.current === 1) window.dispatchEvent(new Event("research-task-ended"));
+    if (phaseRef.current === 1) window.dispatchEvent(new CustomEvent("research-task-ended", { detail: { restSeconds: dataRef.current.durations[2] } }));
     const boundaryMs = Date.now();
     addMarker(PHASES[phaseRef.current].key + "_end", PHASES[phaseRef.current].key, boundaryMs);
     if (phaseRef.current === 1 && dataRef.current.gameId && !dataRef.current.gameStartedAtMs) {
@@ -235,7 +243,7 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
     setClock(0);
     addMarker(PHASES[next].key + "_start", PHASES[next].key, boundaryMs);
     if (next === 1 && dataRef.current.gameId) {
-      window.dispatchEvent(new CustomEvent("research-task-start", { detail: { gameId: dataRef.current.gameId } }));
+      window.dispatchEvent(new CustomEvent("research-task-start", { detail: { gameId: dataRef.current.gameId, restSeconds: dataRef.current.durations[2] } }));
     }
   }
 
@@ -392,6 +400,20 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
   }, [status, phaseIndex, clock]);
 
   async function start(testMode = false) {
+    if (!studyConfig) {
+      setMessage(configError || (locale === "th" ? "กำลังโหลดการตั้งค่าการทดลอง กรุณารอสักครู่" : "Loading study settings. Please wait."));
+      return;
+    }
+    let currentStudy;
+    try {
+      const response = await fetch("/api/config", { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      currentStudy = (await response.json()).study;
+      if (JSON.stringify(currentStudy) !== JSON.stringify(studyConfig)) window.dispatchEvent(new Event("study-config-updated"));
+    } catch (error) {
+      setMessage(locale === "th" ? `ตรวจการตั้งค่าล่าสุดไม่ได้ (${error.message}) กรุณาลองใหม่` : `Could not check the latest study settings (${error.message}). Please retry.`);
+      return;
+    }
     const cleanParticipant = testMode ? "TEST" : participant.trim();
     const cleanSession = testMode ? `CHECK-${Date.now()}` : sessionId.trim();
     if (!testMode && (!cleanParticipant || !cleanSession || !studyGroup || !GAMES.some((game) => game.id === Number(gameId)))) {
@@ -424,8 +446,8 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
         return;
       }
     }
-    if (!testMode && (!Number.isInteger(Number(taskSeconds)) || Number(taskSeconds) < 5 || Number(taskSeconds) > 540)) {
-      setMessage("ช่วงทำกิจกรรมต้องอยู่ระหว่าง 5–540 วินาที");
+    if (!testMode && (!Number.isInteger(Number(taskSeconds)) || Number(taskSeconds) < 5 || Number(taskSeconds) > currentStudy.maxTaskSeconds)) {
+      setMessage(locale === "th" ? `ช่วงทำกิจกรรมต้องอยู่ระหว่าง 5–${currentStudy.maxTaskSeconds} วินาที` : `Task duration must be 5–${currentStudy.maxTaskSeconds} seconds.`);
       return;
     }
     let startedMs = Date.now();
@@ -437,13 +459,13 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
       studyGroup: testMode ? "device_test" : studyGroup,
       gameId: testMode ? 0 : Number(gameId),
       gameStartedAtMs: null,
-      protocolVersion: testMode ? "device_check_v1" : PROTOCOL_VERSION,
+      protocolVersion: testMode ? "device_check_v1" : currentStudy.protocolVersion,
       condition: testMode ? "device-check" : condition.trim(),
       taskName: testMode ? "system-test" : GAMES.find((game) => game.id === Number(gameId)).name,
       testMode,
       startedMs,
       phaseStarts: [startedMs],
-      durations: testMode ? [5, 5, 5] : [BASELINE_SECONDS, Number(taskSeconds), POST_TASK_SECONDS],
+      durations: testMode ? [5, 5, 5] : [currentStudy.baselineSeconds, Number(taskSeconds), currentStudy.postTaskSeconds],
       rows: [],
       samples: 0,
       channels: [0, 0, 0, 0],
@@ -561,6 +583,25 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
     }
   }
 
+  async function claimUnassigned(session) {
+    if (busy || !accountEmail || !window.confirm(locale === "th" ? `รับช่วงรอบ ${session.sessionId} เป็นข้อมูลของบัญชีนี้หรือไม่? โปรดทำเฉพาะรอบที่คุณบันทึกเอง` : `Assign session ${session.sessionId} to this account? Only claim a recording you made.`)) return;
+    setBusy(true);
+    try {
+      const result = await claimUnassignedResearchSession(session.id, accountEmail);
+      if (!result.ok) {
+        const detail = result.reason === "possibly_active" ? (locale === "th" ? "รอบนี้อาจยังบันทึกอยู่ในอีกแท็บ กรุณาปิดแท็บนั้นแล้วลองใหม่" : "This session may still be recording in another tab. Close that tab and retry.") : (locale === "th" ? "ไม่พบรอบนี้หรือมีบัญชีรับช่วงแล้ว" : "This session was not found or has already been assigned.");
+        throw new Error(detail);
+      }
+      setSavedSessions(await listResearchSessions());
+      setMessage(locale === "th" ? "รับช่วงรอบเก่าแล้ว ตรวจข้อมูลก่อนส่งออกหรือกดซิงก์" : "Older session assigned. Review it before exporting or selecting Retry summary sync.");
+      window.dispatchEvent(new Event("research-dashboard-opened"));
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function reset() {
     if (activeRef.current || !exported) return;
     dataRef.current = null;
@@ -573,15 +614,19 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
   }
 
   const data = dataRef.current;
+  const ownedSavedSessions = savedSessions.filter((session) => isOwnedResearchSession(session, accountEmail));
+  const unassignedSavedSessions = savedSessions.filter(isUnassignedResearchSession);
   const groupLabel = (value) => value === "patient" ? (locale === "th" ? "ผู้ป่วย" : "Patient") : value === "control" ? (locale === "th" ? "กลุ่มควบคุม" : "Control") : value || (locale === "th" ? "ไม่ระบุกลุ่ม" : "No group specified");
   const savedStatusLabel = (value) => value === "recording" ? (locale === "th" ? "ค้างจากการปิดหน้า" : "Interrupted when page closed") : value === "complete" ? (locale === "th" ? "ครบถ้วน" : "Complete") : value === "disconnect" ? (locale === "th" ? "อุปกรณ์ตัดการเชื่อมต่อ" : "Device disconnected") : value === "stopped" ? (locale === "th" ? "หยุดแล้ว" : "Stopped") : value;
   const hasFinished = status !== "idle" && status !== "recording";
   const remaining = status === "recording" ? Math.max(0, Math.ceil((data?.durations[phaseIndex] || 0) - clock)) : 0;
-  const shownDurations = data?.durations || [BASELINE_SECONDS, taskSeconds, POST_TASK_SECONDS];
+  const shownDurations = data?.durations || [studyConfig?.baselineSeconds ?? 30, taskSeconds, studyConfig?.postTaskSeconds ?? 30];
+  const shownProtocolVersion = data?.protocolVersion || studyConfig?.protocolVersion || "…";
   const totalDuration = shownDurations.map(Number).reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
   const elapsedPrevious = data?.durations.slice(0, phaseIndex).reduce((sum, value) => sum + value, 0) || 0;
   const progress = status === "recording" && totalDuration ? Math.min(100, ((elapsedPrevious + clock) / totalDuration) * 100) : status === "complete" ? 100 : data && totalDuration ? Math.min(100, (((data.endedMs || data.lastPacketMs) - data.startedMs) / 1000 / totalDuration) * 100) : 0;
   const runLabel = status === "recording" ? PHASES[phaseIndex].label : status === "complete" ? "ครบตามแผนการทดลอง" : hasFinished ? "รอบไม่สมบูรณ์ · ข้อมูลบางส่วน" : "พร้อมตั้งค่าการทดลอง";
+  const secondsLabel = locale === "th" ? "วินาที" : "seconds";
 
   return (
     <div className="study-workspace">
@@ -595,23 +640,23 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
           <label>เงื่อนไขการทดลอง<input value={condition} onChange={(e) => setCondition(e.target.value)} placeholder="standard" maxLength={80} disabled={status !== "idle"} /></label>
         </div>
         <div className="study-durations">
-          <label>{PHASES[0].label}<span>{BASELINE_SECONDS} วินาที</span></label>
-          <label>{PHASES[1].label}<span><input type="number" min="5" max="540" value={taskSeconds} disabled={status !== "idle"} onChange={(e) => setTaskSeconds(e.target.value)} /> วินาทีสูงสุด</span></label>
-          <label>{PHASES[2].label}<span>{POST_TASK_SECONDS} วินาที</span></label>
+          <label>{PHASES[0].label}<span>{shownDurations[0]} {secondsLabel}</span></label>
+          <label>{PHASES[1].label}<span><input type="number" min="5" max={studyConfig?.maxTaskSeconds ?? 540} value={taskSeconds} disabled={status !== "idle" || !studyConfig} onChange={(e) => setTaskSeconds(e.target.value)} /> {locale === "th" ? "วินาทีสูงสุด" : "seconds maximum"}</span></label>
+          <label>{PHASES[2].label}<span>{shownDurations[2]} {secondsLabel}</span></label>
         </div>
-        <p className="muted" style={{ fontSize: "12px", margin: "10px 0 0" }}>EEG บันทึกต่อเนื่อง: พักนิ่ง 30 วินาที → ทำกิจกรรมจนกว่าจะกดจบหรือครบเวลาที่ตั้ง → พักหลังงานอีก 30 วินาที · หนึ่งเกมต่อหนึ่งรอบ · เวลารวมสูงสุด 600 วินาที</p>
+        <p className="muted" style={{ fontSize: "12px", margin: "10px 0 0" }}>{locale === "th" ? `EEG บันทึกต่อเนื่อง: พักนิ่ง ${shownDurations[0]} วินาที → ทำกิจกรรมจนกว่าจะกดจบหรือครบเวลาที่ตั้ง → พักหลังงานอีก ${shownDurations[2]} วินาที · หนึ่งเกมต่อหนึ่งรอบ · เวลารวมสูงสุด 600 วินาที · โปรโตคอล ${shownProtocolVersion}` : `Continuous EEG: ${shownDurations[0]} seconds of baseline → task until completed or timed out → ${shownDurations[2]} seconds of rest · one game per session · 600-second planned maximum · protocol ${shownProtocolVersion}`}</p>
         <label className="study-consent"><input type="checkbox" checked={consent} disabled={status !== "idle"} onChange={(e) => setConsent(e.target.checked)} /> <span>ผู้วิจัยยืนยันว่าได้รับความยินยอมตามขั้นตอนของโครงการแล้ว</span></label>
       </div>
 
       <div className="card study-card">
-        <div className="study-heading"><div><span className="study-kicker">02 · RECORDING</span><h2>ดำเนินการทดลอง</h2><p className="muted">EEG บันทึกตลอด Baseline 30 วินาที → Task → Rest 30 วินาที · เกมเปิดเองเมื่อเริ่ม Task</p></div><span className={ready ? liveRailPercents.some((value) => value >= 1) ? "pill study-warn" : "pill study-ready" : "pill"}>{ready ? liveRailPercents.some((value) => value >= 1) ? "● EEG ครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์" : "● EEG ครบ 4 ช่อง" : "○ รอ EEG ครบ 4 ช่อง"}</span></div>
+        <div className="study-heading"><div><span className="study-kicker">02 · RECORDING</span><h2>ดำเนินการทดลอง</h2><p className="muted">{locale === "th" ? `EEG บันทึกตลอด Baseline ${shownDurations[0]} วินาที → Task → Rest ${shownDurations[2]} วินาที · เกมเปิดเองเมื่อเริ่ม Task` : `EEG records through a ${shownDurations[0]}-second baseline → task → ${shownDurations[2]}-second rest · the game opens at task start`}</p></div><span className={ready ? liveRailPercents.some((value) => value >= 1) ? "pill study-warn" : "pill study-ready" : "pill"}>{ready ? liveRailPercents.some((value) => value >= 1) ? "● EEG ครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์" : "● EEG ครบ 4 ช่อง" : "○ รอ EEG ครบ 4 ช่อง"}</span></div>
         {ready && liveRailPercents.some((value) => value >= 1) && <p className="study-signal-warning" role="alert">สัญญาณล่าสุด 3 วินาทีชนขอบ: {CHANNELS.map((name, index) => `${name} ${liveRailPercents[index].toFixed(1)}%`).join(" · ")} · ปรับเซนเซอร์ก่อนเริ่มรอบผู้เข้าร่วม</p>}
-        <div className="study-phase-grid">{PHASES.map((phase, index) => <div className={"study-phase" + (status === "recording" && phaseIndex === index ? " current" : "")} key={phase.key}><small>0{index + 1}</small><strong>{phase.label}</strong><span>{index === 1 && phaseIndex > 1 ? shownDurations[index].toFixed(1) : shownDurations[index]} วินาที</span></div>)}</div>
+        <div className="study-phase-grid">{PHASES.map((phase, index) => <div className={"study-phase" + (status === "recording" && phaseIndex === index ? " current" : "")} key={phase.key}><small>0{index + 1}</small><strong>{phase.label}</strong><span>{index === 1 && phaseIndex > 1 ? shownDurations[index].toFixed(1) : shownDurations[index]} {secondsLabel}</span></div>)}</div>
         <div className="study-runbar"><div style={{ width: `${progress}%` }} /></div>
         <div className="study-run-status"><strong>{runLabel}</strong><span>{status === "recording" ? `เหลือ ${remaining} วินาที` : data ? `${data.samples.toLocaleString()} samples · ${data.events} markers` : "ยังไม่มีข้อมูลในรอบนี้"}</span></div>
         <div className="controls">
-          {status === "idle" && <button type="button" onClick={() => start(false)} disabled={!storageReady || busy}>เริ่มบันทึกการทดลอง</button>}
-          {status === "idle" && <button type="button" className="secondary" onClick={() => start(true)} disabled={!storageReady || busy}>ทดสอบอุปกรณ์ 15 วินาที</button>}
+          {status === "idle" && <button type="button" onClick={() => start(false)} disabled={!storageReady || busy || !studyConfig}>เริ่มบันทึกการทดลอง</button>}
+          {status === "idle" && <button type="button" className="secondary" onClick={() => start(true)} disabled={!storageReady || busy || !studyConfig}>ทดสอบอุปกรณ์ 15 วินาที</button>}
           {status === "recording" && <button type="button" className="secondary" onClick={() => finish("stopped")}>หยุดและเก็บข้อมูลที่มี</button>}
           {hasFinished && !data?.rawDeleted && <button type="button" onClick={() => exportCsv()} disabled={busy}>ส่งออก EEG + markers (.csv)</button>}
           {hasFinished && <button type="button" className="secondary" onClick={reset} disabled={!exported || busy}>เริ่มรอบใหม่</button>}
@@ -624,12 +669,12 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
         })}</div>}
         {data?.railSamples?.some((count, index) => count / Math.max(1, data.channels[index]) >= 0.01) && <p className="study-signal-warning" role="alert">สัญญาณบางช่องชนขอบช่วงวัดของ Muse มากกว่า 1% ข้อมูลช่องนั้นอาจใช้วิเคราะห์ไม่ได้ ตรวจให้เซนเซอร์สัมผัสผิวหนังแนบสนิท แล้วทดสอบใหม่ก่อนเก็บข้อมูลผู้เข้าร่วม</p>}
         {data && hasFinished && <p className="study-message">ตรวจคุณภาพ: {data.missingPackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ที่ตรวจพบว่าขาด · {data.duplicatePackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ซ้ำ · {data.reorderedPackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ลำดับผิดปกติ การนับนี้เป็นการประมาณจากลำดับแพ็กเก็ตของ Muse</p>}
-        <p className="study-message" role="status">{message || (storageReady ? "ข้อมูล EEG จะบันทึกในเบราว์เซอร์นี้ โปรดส่งออก CSV เพื่อสำรองข้อมูล" : "กำลังตรวจสอบที่เก็บข้อมูลในเบราว์เซอร์")}</p>
+        <p className="study-message" role="status">{configError || message || (!studyConfig ? "กำลังโหลดการตั้งค่าการทดลอง" : storageReady ? "ข้อมูล EEG จะบันทึกในเบราว์เซอร์นี้ โปรดส่งออก CSV เพื่อสำรองข้อมูล" : "กำลังตรวจสอบที่เก็บข้อมูลในเบราว์เซอร์")}</p>
       </div>
-      {savedSessions.length > 0 && <div className="card study-card">
+      {ownedSavedSessions.length > 0 && <div className="card study-card">
         <div className="study-heading"><div><span className="study-kicker">03 · LOCAL RECORDINGS</span><h2>รอบทดลองที่เก็บในเครื่อง</h2><p className="muted">ผลสรุปแต่ละรอบอยู่ใน Dashboard และจะส่งขึ้นเซิร์ฟเวอร์ให้ admin ดูตามรหัสผู้เข้าร่วม</p></div><button type="button" className="secondary" disabled={!enabled || syncing} onClick={syncPending}>{syncing ? (locale === "th" ? "กำลังซิงก์…" : "Syncing…") : (locale === "th" ? "ซิงก์ผลสรุปอีกครั้ง" : "Retry summary sync")}</button></div>
         {syncError && <p className="study-signal-warning" role="alert">{locale === "th" ? "ซิงก์ผลสรุปไม่สำเร็จ" : "Summary sync failed"}: {syncError}</p>}
-        <div className="study-saved-list">{savedSessions.map((session) => <div className="study-saved-item" key={session.id}>
+        <div className="study-saved-list">{ownedSavedSessions.map((session) => <div className="study-saved-item" key={session.id}>
           <div><strong>{session.participant} · {session.sessionId}</strong><small>{new Date(session.startedMs).toLocaleString(locale === "th" ? "th-TH" : "en-US")} · {session.testMode ? (locale === "th" ? "ทดสอบอุปกรณ์" : "Device test") : `${groupLabel(session.studyGroup)} · ${localizeText(session.taskName, locale)}`} · {savedStatusLabel(session.status)} · {session.samples.toLocaleString()} samples{session.rawDeleted ? (locale === "th" ? " · เก็บเฉพาะสรุป" : " · summary only") : ""} · {session.serverSyncedAt && session.serverSyncedBy === accountEmail ? (locale === "th" ? "ซิงก์แล้ว" : "Synced") : (locale === "th" ? "รอซิงก์" : "Pending sync")}</small></div>
           <div className="controls">
             <button type="button" className="secondary" onClick={() => { window.showSection?.("dashboard"); window.dispatchEvent(new CustomEvent("research-summary-select", { detail: { id: session.id } })); requestAnimationFrame(() => document.querySelector(".research-history")?.scrollIntoView({ behavior: "smooth" })); }}>{locale === "th" ? "ดูสรุป" : "View summary"}</button>
@@ -638,6 +683,10 @@ export default function ResearchSession({ locale = "th", enabled = false, accoun
             <button type="button" className="secondary" disabled={busy || session.status === "recording" || session.id === data?.id} onClick={() => removeSaved(session)}>{locale === "th" ? "ลบรอบถาวร" : "Delete session"}</button>
           </div>
         </div>)}</div>
+      </div>}
+      {accountEmail && unassignedSavedSessions.length > 0 && <div className="card study-card">
+        <div className="study-heading"><div><span className="study-kicker">LOCAL RECORDINGS</span><h2>{locale === "th" ? "รอบเก่าที่ไม่มีบัญชีเจ้าของ" : "Older recordings without an owner"}</h2><p className="muted">{locale === "th" ? "รอบเหล่านี้จะไม่ซิงก์อัตโนมัติ รับช่วงเฉพาะรอบที่คุณบันทึกเอง" : "These sessions will not sync automatically. Only assign sessions you recorded."}</p></div><button type="button" className="secondary" onClick={() => setShowUnassigned((value) => !value)}>{showUnassigned ? (locale === "th" ? "ซ่อนรายการ" : "Hide list") : (locale === "th" ? `ตรวจ ${unassignedSavedSessions.length} รอบ` : `Review ${unassignedSavedSessions.length} sessions`)}</button></div>
+        {showUnassigned && <div className="study-saved-list">{unassignedSavedSessions.map((session) => <div className="study-saved-item" key={session.id}><div><strong>{session.participant} · {session.sessionId}</strong><small>{new Date(session.startedMs).toLocaleString(locale === "th" ? "th-TH" : "en-US")} · {savedStatusLabel(session.status)}</small></div><div className="controls"><button type="button" className="secondary" disabled={busy} onClick={() => claimUnassigned(session)}>{locale === "th" ? "รับช่วงเข้าบัญชีนี้" : "Assign to this account"}</button></div></div>)}</div>}
       </div>}
     </div>
   );

@@ -6,6 +6,15 @@ import { normalizeResearchSubmission, ResearchValidationError } from "@/lib/rese
 export const runtime = "nodejs";
 
 export async function POST(request) {
+  try {
+    return await saveSummary(request);
+  } catch (error) {
+    if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    throw error;
+  }
+}
+
+async function saveSummary(request) {
   const session = await getSession();
   if (!session || !(await findUser(session.email))) return Response.json({ error: "unauthorized" }, { status: 401 });
   const origin = request.headers.get("origin");
