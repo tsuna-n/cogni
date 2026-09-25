@@ -51,7 +51,7 @@ export async function POST(request) {
     }
 
     await createSession(email);
-    return Response.json({ user: { email, name: user.name } }, { status: 201 });
+    return Response.json({ user: { email, name: user.name, role: "researcher" } }, { status: 201 });
   } catch (err) {
     if (isStorageError(err)) {
       return Response.json({ error: "storage_unavailable" }, { status: 503 });

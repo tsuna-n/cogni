@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { listResearchSessions } from "./researchStorage";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getResearchGameSummaryMarker, listResearchSessions, saveResearchSummary } from "./researchStorage";
+import { parseGameSummaryMarker, summarizeResearchSession } from "@/lib/research-summary.mjs";
+import ResearchHistory from "./ResearchHistory";
 
 const CHANNELS = ["TP9", "AF7", "AF8", "TP10"];
 const PHASES = [
@@ -24,21 +26,43 @@ function sessionRate(session) {
   return samples > 0 ? samples / 4 / duration : null;
 }
 
-export default function ResearchDashboard() {
+export default function ResearchDashboard({ locale = "th" }) {
+  const dateLocale = locale === "th" ? "th-TH" : "en-US";
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [backfilling, setBackfilling] = useState(0);
+  const refreshId = useRef(0);
 
   const refresh = useCallback(async () => {
+    const requestId = ++refreshId.current;
     try {
       const saved = await listResearchSessions();
-      setSessions(saved);
+      if (requestId !== refreshId.current) return;
+      setSessions(saved.map((session) => session.summary ? session : { ...session, summary: summarizeResearchSession(session) }));
       setError("");
-    } catch (cause) {
-      setSessions([]);
-      setError(`อ่านข้อมูลรอบ EEG ไม่สำเร็จ: ${cause.message}`);
-    } finally {
       setLoading(false);
+      const legacy = saved.filter((session) => !session.summary && session.status !== "recording" && !session.rawDeleted);
+      setBackfilling(legacy.length);
+      for (const session of legacy) {
+        if (requestId !== refreshId.current) return;
+        try {
+          const gameSummary = session.gameSummary || parseGameSummaryMarker(await getResearchGameSummaryMarker(session.id));
+          const summary = summarizeResearchSession(session, gameSummary);
+          await saveResearchSummary(session.id, summary, gameSummary);
+          if (requestId === refreshId.current) setSessions((current) => current.map((item) => item.id === session.id ? { ...item, gameSummary, summary } : item));
+        } catch (cause) {
+          if (requestId === refreshId.current) setError(`อ่านผลสรุปรอบ ${session.sessionId} ไม่สำเร็จ: ${cause.message}`);
+        } finally {
+          if (requestId === refreshId.current) setBackfilling((count) => Math.max(0, count - 1));
+        }
+      }
+    } catch (cause) {
+      if (requestId !== refreshId.current) return;
+      setError(`อ่านข้อมูลรอบ EEG ไม่สำเร็จ: ${cause.message}`);
+      setBackfilling(0);
+    } finally {
+      if (requestId === refreshId.current) setLoading(false);
     }
   }, []);
 
@@ -75,12 +99,16 @@ export default function ResearchDashboard() {
     <div className="research-dashboard">
       <div className="study-heading">
         <div><span className="study-kicker">EEG RECORDINGS</span><h2>ภาพรวมรอบทดลอง EEG</h2><p className="muted">แสดงเฉพาะรอบทดลองที่บันทึกครบและไม่ใช่การทดสอบอุปกรณ์ · ข้อมูลอยู่ในเบราว์เซอร์นี้</p></div>
-        <button type="button" className="secondary" onClick={refresh}>อัปเดตกราฟ</button>
+        <div className="controls" style={{ margin: 0 }}>
+          <button type="button" className="secondary" onClick={() => document.querySelector(".research-history")?.scrollIntoView({ behavior: "smooth" })}>{locale === "th" ? "ดูประวัติและเปรียบเทียบ" : "View history and compare"}</button>
+          <button type="button" className="secondary" onClick={refresh}>อัปเดตกราฟ</button>
+        </div>
       </div>
       {error && <p className="study-signal-warning" role="alert">{error}</p>}
       <div className="research-chart-summary" aria-live="polite">
+        <span><strong>{sessions.length}</strong> {locale === "th" ? "รอบทั้งหมด" : "all sessions"}</span>
         <span><strong>{complete.length}</strong> รอบที่บันทึกครบ</span>
-        <span><strong>{latest ? new Date(latest.startedMs).toLocaleString("th-TH") : "—"}</strong> รอบล่าสุด</span>
+        <span><strong>{latest ? new Date(latest.startedMs).toLocaleString(dateLocale) : "—"}</strong> รอบล่าสุด</span>
         <span><strong>{latest ? (latest.channels || []).reduce((sum, value) => sum + (Number(value) || 0), 0).toLocaleString() : "—"}</strong> EEG samples รอบล่าสุด</span>
       </div>
       <div className="research-charts">
@@ -110,13 +138,14 @@ export default function ResearchDashboard() {
                 return <g key={tick}><line x1="50" x2="560" y1={y(value)} y2={y(value)} className="research-grid-line" /><text x="42" y={y(value) + 4} textAnchor="end">{value.toFixed(0)}</text></g>;
               })}
               {recent.length > 1 && <polyline points={linePoints} className="research-data-line" />}
-              {recent.map((item, index) => <g key={item.session.id}><circle cx={x(index)} cy={y(item.rate)} r="5" className="research-data-point"><title>{new Date(item.session.startedMs).toLocaleString("th-TH")} · {item.rate.toFixed(1)} Hz</title></circle><text x={x(index)} y="202" textAnchor="middle">{index + 1}</text></g>)}
+              {recent.map((item, index) => <g key={item.session.id}><circle cx={x(index)} cy={y(item.rate)} r="5" className="research-data-point"><title>{new Date(item.session.startedMs).toLocaleString(dateLocale)} · {item.rate.toFixed(1)} Hz</title></circle><text x={x(index)} y="202" textAnchor="middle">{index + 1}</text></g>)}
             </svg>
             {recent.length === 1 && <p className="muted research-line-note">มีข้อมูลหนึ่งรอบ กราฟจะแสดงเส้นแนวโน้มเมื่อมีรอบที่บันทึกครบอย่างน้อยสองรอบ</p>}
-            <p className="muted research-line-note">เลขใต้กราฟคือรอบที่ {recent.map((item, index) => `${index + 1}: ${new Date(item.session.startedMs).toLocaleDateString("th-TH")} (${item.rate.toFixed(1)} Hz)`).join(" · ")}</p>
+            <p className="muted research-line-note">เลขใต้กราฟคือรอบที่ {recent.map((item, index) => `${index + 1}: ${new Date(item.session.startedMs).toLocaleDateString(dateLocale)} (${item.rate.toFixed(1)} Hz)`).join(" · ")}</p>
           </> : <p className="research-chart-empty">{loading ? "กำลังโหลดข้อมูล…" : "ยังไม่มีรอบ EEG ที่บันทึกครบ"}</p>}
         </figure>
       </div>
+      <ResearchHistory sessions={sessions} locale={locale} loading={loading} backfilling={backfilling} />
     </div>
   );
 }

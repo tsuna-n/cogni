@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { deleteResearchSession, getResearchChunks, listResearchSessions, openResearchDatabase, saveResearchSession } from "./researchStorage";
+import { deleteResearchSession, getResearchChunks, getResearchGameSummaryMarker, listResearchSessions, markResearchSummarySynced, openResearchDatabase, pruneResearchRawData, saveResearchSession, saveResearchSummary } from "./researchStorage";
+import { localizeText } from "@/lib/localization";
+import { parseGameSummaryMarker, summarizeResearchSession } from "@/lib/research-summary.mjs";
 
 const CHANNELS = ["TP9", "AF7", "AF8", "TP10"];
 const PHASES = [
@@ -29,7 +31,7 @@ function filePart(value) {
   return String(value).trim().replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40) || "unknown";
 }
 
-export default function ResearchSession() {
+export default function ResearchSession({ locale = "th", enabled = false, accountEmail = "" }) {
   const [participant, setParticipant] = useState("");
   const [sessionId, setSessionId] = useState("S01");
   const [studyGroup, setStudyGroup] = useState("");
@@ -49,6 +51,9 @@ export default function ResearchSession() {
   const [storageReady, setStorageReady] = useState(false);
   const [savedSessions, setSavedSessions] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState("");
+  const syncRef = useRef(Promise.resolve());
   const dataRef = useRef(null);
   const writeQueueRef = useRef(Promise.resolve());
   const activeRef = useRef(false);
@@ -105,6 +110,7 @@ export default function ResearchSession() {
         if (recovered.status === "recording") {
           recovered.status = "interrupted";
           recovered.endedMs = recovered.lastPacketMs || recovered.startedMs;
+          recovered.summary = summarizeResearchSession(recovered);
           writeQueueRef.current = saveResearchSession(snapshot(recovered), recovered.nextSequence, []).then(async () => {
             if (mounted) setSavedSessions(await listResearchSessions());
           }).catch((error) => {
@@ -121,6 +127,62 @@ export default function ResearchSession() {
     return () => { mounted = false; };
   }, []);
 
+  async function syncPending() {
+    if (!enabled || !accountEmail) return;
+    const run = syncRef.current.then(async () => {
+      setSyncing(true);
+      setSyncError("");
+      try {
+        const sessions = await listResearchSessions();
+        const failures = [];
+        for (const session of sessions) {
+          if (session.status === "recording" || (session.ownerEmail && session.ownerEmail !== accountEmail) || (session.serverSyncedBy && session.serverSyncedBy !== accountEmail) || (session.serverSyncedAt && session.serverSyncedBy === accountEmail)) continue;
+          try {
+            let summary = session.summary;
+            if (!summary) {
+              const gameSummary = session.gameSummary || parseGameSummaryMarker(await getResearchGameSummaryMarker(session.id));
+              summary = summarizeResearchSession(session, gameSummary);
+              await saveResearchSummary(session.id, summary, gameSummary);
+            }
+            const response = await fetch("/api/research/summaries", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ recordId: session.id, summary }),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.detail || result.error || `HTTP ${response.status}`);
+            if (result.uploadedBy !== accountEmail) throw new Error("Account changed during sync");
+            await markResearchSummarySynced(session.id, summary, accountEmail, result.uploadedAt);
+            if (dataRef.current?.id === session.id && JSON.stringify(dataRef.current.summary) === JSON.stringify(summary)) {
+              dataRef.current.serverSyncedAt = result.uploadedAt;
+              dataRef.current.serverSyncedBy = accountEmail;
+            }
+          } catch (error) {
+            failures.push(`${session.sessionId || session.id}: ${error.message}`);
+          }
+        }
+        setSavedSessions(await listResearchSessions());
+        if (failures.length) setSyncError(failures.join(" · "));
+      } catch (error) {
+        setSyncError(error.message);
+      } finally {
+        setSyncing(false);
+      }
+    });
+    syncRef.current = run.catch(() => {});
+    await run;
+  }
+
+  useEffect(() => {
+    if (!enabled || !storageReady) return;
+    syncPending();
+    const onFinished = () => syncPending();
+    window.addEventListener("research-session-finished", onFinished);
+    return () => window.removeEventListener("research-session-finished", onFinished);
+  // Sync is intentionally tied to the authenticated account, not each local list update.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, storageReady, accountEmail]);
+
   function addMarker(label, phase = PHASES[phaseRef.current]?.key || "", now = Date.now()) {
     const data = dataRef.current;
     if (!data) return;
@@ -136,11 +198,13 @@ export default function ResearchSession() {
     activeRef.current = false;
     dataRef.current.status = reason;
     dataRef.current.endedMs = Date.now();
+    dataRef.current.summary = summarizeResearchSession(dataRef.current);
     window.__studyPhase = null;
     window.__studyGameId = null;
     setStatus(reason);
-    persist(true);
-    window.dispatchEvent(new Event("research-session-finished"));
+    persist(true).then(() => {
+      if (dataRef.current?.status !== "storage_error") window.dispatchEvent(new Event("research-session-finished"));
+    });
     const clipped = dataRef.current.railSamples?.some((count, channel) => count / Math.max(1, dataRef.current.channels[channel]) >= 0.01);
     setMessage(reason === "disconnect" ? "Muse ขาดการเชื่อมต่อ ข้อมูลที่บันทึกไว้ยังส่งออกได้" : reason === "signal_lost" ? "สัญญาณ EEG หายเกิน 3 วินาที การทดลองหยุดแล้ว" : reason === "hidden" ? "แท็บถูกซ่อนระหว่างบันทึก การทดลองหยุดเพื่อรักษาความถูกต้องของเวลา" : reason === "task_screen_left" ? "ออกจากหน้าเกมระหว่าง Task รอบนี้ไม่สมบูรณ์ กรุณาส่งออกข้อมูลที่มี" : reason === "task_not_started" ? "เกมไม่เริ่มในช่วง Task รอบนี้ไม่สมบูรณ์ กรุณาส่งออกข้อมูลที่มี" : reason === "complete" && clipped ? "บันทึกครบ แต่สัญญาณบางช่องชนขอบช่วงวัด กรุณาปรับเซนเซอร์และทดสอบซ้ำก่อนเก็บผู้เข้าร่วม" : reason === "complete" ? "ครบทุกช่วงแล้ว กรุณาส่งออก CSV" : "หยุดการทดลองแล้ว กรุณาส่งออก CSV");
   }
@@ -278,6 +342,8 @@ export default function ResearchSession() {
       if (activeRef.current && event.detail?.label) {
         const label = String(event.detail.label).slice(0, 120);
         if (label === `game_${dataRef.current?.gameId}_start`) dataRef.current.gameStartedAtMs = Date.now();
+        const gameSummary = parseGameSummaryMarker(label);
+        if (gameSummary) dataRef.current.gameSummary = gameSummary;
         markerRef.current(label);
       }
     };
@@ -365,6 +431,7 @@ export default function ResearchSession() {
     let startedMs = Date.now();
     const data = {
       id: crypto.randomUUID(),
+      ownerEmail: accountEmail,
       participant: cleanParticipant,
       sessionId: cleanSession,
       studyGroup: testMode ? "device_test" : studyGroup,
@@ -424,7 +491,7 @@ export default function ResearchSession() {
   }
 
   async function exportCsv(target = dataRef.current) {
-    if (!target || busy) return;
+    if (!target || target.rawDeleted || busy) return;
     setBusy(true);
     if (target === dataRef.current) await persist(true);
     await writeQueueRef.current;
@@ -459,12 +526,34 @@ export default function ResearchSession() {
     }
   }
 
+  async function pruneSaved(session) {
+    if (busy || !session.exported || session.rawDeleted || !window.confirm(locale === "th" ? `ลบ EEG ดิบของรอบ ${session.sessionId} หรือไม่? ระบบจะเก็บผลสรุปไว้เพื่อเปรียบเทียบ` : `Delete raw EEG for session ${session.sessionId}? Its summary will remain for comparison.`)) return;
+    setBusy(true);
+    try {
+      const gameSummary = session.gameSummary || parseGameSummaryMarker(await getResearchGameSummaryMarker(session.id));
+      const summary = summarizeResearchSession(session, gameSummary);
+      const changed = JSON.stringify(summary) !== JSON.stringify(session.summary);
+      await pruneResearchRawData({ ...session, gameSummary, summary, serverSyncedAt: changed ? null : session.serverSyncedAt });
+      if (dataRef.current?.id === session.id) {
+        dataRef.current.rawDeleted = true;
+        setViewTick((value) => value + 1);
+      }
+      setSavedSessions(await listResearchSessions());
+      window.dispatchEvent(new Event("research-session-finished"));
+    } catch (error) {
+      setMessage(`ลบ EEG ดิบไม่สำเร็จ: ${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeSaved(session) {
-    if (busy || !session.exported || !window.confirm(`ลบข้อมูล EEG รอบ ${session.sessionId} จากเบราว์เซอร์นี้? กรุณาตรวจสอบไฟล์ CSV ก่อน`)) return;
+    if (busy || session.status === "recording" || session.id === dataRef.current?.id || !window.confirm(locale === "th" ? `ลบรอบ ${session.sessionId} และผลสรุปถาวรหรือไม่?` : `Permanently delete session ${session.sessionId} and its summary?`)) return;
     setBusy(true);
     try {
       await deleteResearchSession(session.id);
       setSavedSessions(await listResearchSessions());
+      window.dispatchEvent(new Event("research-session-finished"));
     } catch (error) {
       setMessage(`ลบข้อมูลไม่สำเร็จ: ${error.message}`);
     } finally {
@@ -484,6 +573,8 @@ export default function ResearchSession() {
   }
 
   const data = dataRef.current;
+  const groupLabel = (value) => value === "patient" ? (locale === "th" ? "ผู้ป่วย" : "Patient") : value === "control" ? (locale === "th" ? "กลุ่มควบคุม" : "Control") : value || (locale === "th" ? "ไม่ระบุกลุ่ม" : "No group specified");
+  const savedStatusLabel = (value) => value === "recording" ? (locale === "th" ? "ค้างจากการปิดหน้า" : "Interrupted when page closed") : value === "complete" ? (locale === "th" ? "ครบถ้วน" : "Complete") : value === "disconnect" ? (locale === "th" ? "อุปกรณ์ตัดการเชื่อมต่อ" : "Device disconnected") : value === "stopped" ? (locale === "th" ? "หยุดแล้ว" : "Stopped") : value;
   const hasFinished = status !== "idle" && status !== "recording";
   const remaining = status === "recording" ? Math.max(0, Math.ceil((data?.durations[phaseIndex] || 0) - clock)) : 0;
   const shownDurations = data?.durations || [BASELINE_SECONDS, taskSeconds, POST_TASK_SECONDS];
@@ -522,7 +613,7 @@ export default function ResearchSession() {
           {status === "idle" && <button type="button" onClick={() => start(false)} disabled={!storageReady || busy}>เริ่มบันทึกการทดลอง</button>}
           {status === "idle" && <button type="button" className="secondary" onClick={() => start(true)} disabled={!storageReady || busy}>ทดสอบอุปกรณ์ 15 วินาที</button>}
           {status === "recording" && <button type="button" className="secondary" onClick={() => finish("stopped")}>หยุดและเก็บข้อมูลที่มี</button>}
-          {hasFinished && <button type="button" onClick={() => exportCsv()} disabled={busy}>ส่งออก EEG + markers (.csv)</button>}
+          {hasFinished && !data?.rawDeleted && <button type="button" onClick={() => exportCsv()} disabled={busy}>ส่งออก EEG + markers (.csv)</button>}
           {hasFinished && <button type="button" className="secondary" onClick={reset} disabled={!exported || busy}>เริ่มรอบใหม่</button>}
           {!ready && status === "idle" && <button type="button" className="secondary" onClick={() => document.getElementById("connectMuseBtn")?.click()}>เชื่อมต่อ Muse</button>}
         </div>
@@ -535,7 +626,19 @@ export default function ResearchSession() {
         {data && hasFinished && <p className="study-message">ตรวจคุณภาพ: {data.missingPackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ที่ตรวจพบว่าขาด · {data.duplicatePackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ซ้ำ · {data.reorderedPackets.reduce((sum, value) => sum + value, 0).toLocaleString()} packets ลำดับผิดปกติ การนับนี้เป็นการประมาณจากลำดับแพ็กเก็ตของ Muse</p>}
         <p className="study-message" role="status">{message || (storageReady ? "ข้อมูล EEG จะบันทึกในเบราว์เซอร์นี้ โปรดส่งออก CSV เพื่อสำรองข้อมูล" : "กำลังตรวจสอบที่เก็บข้อมูลในเบราว์เซอร์")}</p>
       </div>
-      {savedSessions.length > 0 && <div className="card study-card"><div className="study-heading"><div><span className="study-kicker">03 · LOCAL RECORDINGS</span><h2>รอบทดลองที่เก็บในเครื่อง</h2><p className="muted">ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น ส่งออกและตรวจไฟล์ก่อนลบ</p></div></div><div className="study-saved-list">{savedSessions.map((session) => <div className="study-saved-item" key={session.id}><div><strong>{session.participant} · {session.sessionId}</strong><small>{new Date(session.startedMs).toLocaleString("th-TH")} · {session.testMode ? "ทดสอบอุปกรณ์" : `${session.studyGroup || "ไม่ระบุกลุ่ม"} · ${session.taskName}`} · {session.status === "recording" ? "ค้างจากการปิดหน้า" : session.status} · {session.samples.toLocaleString()} samples</small></div><div className="controls"><button type="button" className="secondary" disabled={busy || session.status === "recording"} onClick={() => exportCsv(session)}>ส่งออกอีกครั้ง</button><button type="button" className="secondary" disabled={busy || !session.exported || session.id === data?.id} onClick={() => removeSaved(session)}>ลบจากเครื่อง</button></div></div>)}</div></div>}
+      {savedSessions.length > 0 && <div className="card study-card">
+        <div className="study-heading"><div><span className="study-kicker">03 · LOCAL RECORDINGS</span><h2>รอบทดลองที่เก็บในเครื่อง</h2><p className="muted">ผลสรุปแต่ละรอบอยู่ใน Dashboard และจะส่งขึ้นเซิร์ฟเวอร์ให้ admin ดูตามรหัสผู้เข้าร่วม</p></div><button type="button" className="secondary" disabled={!enabled || syncing} onClick={syncPending}>{syncing ? (locale === "th" ? "กำลังซิงก์…" : "Syncing…") : (locale === "th" ? "ซิงก์ผลสรุปอีกครั้ง" : "Retry summary sync")}</button></div>
+        {syncError && <p className="study-signal-warning" role="alert">{locale === "th" ? "ซิงก์ผลสรุปไม่สำเร็จ" : "Summary sync failed"}: {syncError}</p>}
+        <div className="study-saved-list">{savedSessions.map((session) => <div className="study-saved-item" key={session.id}>
+          <div><strong>{session.participant} · {session.sessionId}</strong><small>{new Date(session.startedMs).toLocaleString(locale === "th" ? "th-TH" : "en-US")} · {session.testMode ? (locale === "th" ? "ทดสอบอุปกรณ์" : "Device test") : `${groupLabel(session.studyGroup)} · ${localizeText(session.taskName, locale)}`} · {savedStatusLabel(session.status)} · {session.samples.toLocaleString()} samples{session.rawDeleted ? (locale === "th" ? " · เก็บเฉพาะสรุป" : " · summary only") : ""} · {session.serverSyncedAt && session.serverSyncedBy === accountEmail ? (locale === "th" ? "ซิงก์แล้ว" : "Synced") : (locale === "th" ? "รอซิงก์" : "Pending sync")}</small></div>
+          <div className="controls">
+            <button type="button" className="secondary" onClick={() => { window.showSection?.("dashboard"); window.dispatchEvent(new CustomEvent("research-summary-select", { detail: { id: session.id } })); requestAnimationFrame(() => document.querySelector(".research-history")?.scrollIntoView({ behavior: "smooth" })); }}>{locale === "th" ? "ดูสรุป" : "View summary"}</button>
+            {!session.rawDeleted && <button type="button" className="secondary" disabled={busy || session.status === "recording"} onClick={() => exportCsv(session)}>{locale === "th" ? "ส่งออก CSV" : "Export CSV"}</button>}
+            {!session.rawDeleted && <button type="button" className="secondary" disabled={busy || !session.exported || session.status === "recording"} onClick={() => pruneSaved(session)}>{locale === "th" ? "ลบ EEG ดิบ เก็บสรุป" : "Delete raw EEG, keep summary"}</button>}
+            <button type="button" className="secondary" disabled={busy || session.status === "recording" || session.id === data?.id} onClick={() => removeSaved(session)}>{locale === "th" ? "ลบรอบถาวร" : "Delete session"}</button>
+          </div>
+        </div>)}</div>
+      </div>}
     </div>
   );
 }

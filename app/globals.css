@@ -48,7 +48,31 @@ section{display:none}section.active{display:block}.formgrid{display:grid;grid-te
 .research-data-line{fill:none;stroke:#33d6ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .research-data-point{fill:#9b7bff;stroke:#eaf3ff;stroke-width:1.5}
 .research-line-note{font-size:12px;line-height:1.6;margin-bottom:0}
+.research-history{display:block;margin-top:26px;scroll-margin-top:100px}
+.admin-panel{margin-top:22px}
+.admin-search{display:grid;gap:7px;max-width:400px;margin-top:16px}
+.admin-participants{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.admin-participants button{display:flex;align-items:center;gap:14px;max-width:100%;overflow-wrap:anywhere}
+.admin-participants button span{opacity:.7;font-size:12px}
+.admin-participants button.active{background:linear-gradient(90deg,var(--cyan),var(--violet));color:#06101d}
+.admin-panel>.study-card{margin-bottom:14px}
+.research-history>.study-heading{align-items:center}
+.research-history-empty{color:var(--muted)}
+.research-history-scroll{overflow-x:auto;border:1px solid #294963;border-radius:12px}
+.research-history-table{min-width:980px;background:#0b1d30}
+.research-history-table th,.research-history-table td{white-space:nowrap;font-variant-numeric:tabular-nums}
+.research-history-table tbody tr:nth-child(even){background:#10243b}
+.research-history-table tbody tr:hover{background:#14314d}
+.research-history-table td strong{color:var(--text)}
+.research-compare{margin-top:16px}
+.research-compare h3{margin-bottom:14px}
+.research-compare-pickers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.research-compare-pickers label{display:grid;gap:7px;color:var(--muted);font-size:13px}
+.research-compare-table{min-width:720px}
+.research-compare-table th:first-child{text-align:left}
+.research-compare-table td{text-align:right}
 @media(max-width:750px){.research-charts{grid-template-columns:1fr}.research-pie-layout{justify-content:flex-start}.research-bar-plot{gap:6px}.research-bar-value{font-size:11px}}
+@media(max-width:750px){.research-compare-pickers{grid-template-columns:1fr}}
 
 @media(max-width:700px){#journey .grid{grid-template-columns:repeat(2,1fr)!important}}
 

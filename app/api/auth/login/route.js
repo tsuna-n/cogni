@@ -1,7 +1,7 @@
 import { verifyPassword } from "@/lib/auth/password";
 import { clientKey, rateLimit } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
-import { findUser, isStorageError, recordLogin } from "@/lib/auth/store";
+import { findUser, isAdminEmail, isStorageError, recordLogin } from "@/lib/auth/store";
 
 export async function POST(request) {
   const limit = rateLimit(clientKey(request, "login"), 10, 60_000);
@@ -34,5 +34,5 @@ export async function POST(request) {
     if (!isStorageError(err)) throw err;
   }
   await createSession(email);
-  return Response.json({ user: { email, name: user.name || null } });
+  return Response.json({ user: { email, name: user.name || null, role: isAdminEmail(email) ? "admin" : "researcher" } });
 }

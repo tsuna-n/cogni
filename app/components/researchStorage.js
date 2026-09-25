@@ -41,7 +41,13 @@ export async function saveResearchSession(session, sequence, rows) {
   const database = await openResearchDatabase();
   const transaction = database.transaction(["sessions", "chunks"], "readwrite");
   const done = transactionDone(transaction);
-  transaction.objectStore("sessions").put(session);
+  const store = transaction.objectStore("sessions");
+  const request = store.get(session.id);
+  request.onsuccess = () => {
+    const previous = request.result;
+    const sameSummary = previous?.serverSyncedAt && session.summary && JSON.stringify(previous.summary) === JSON.stringify(session.summary);
+    store.put(sameSummary ? { ...session, serverSyncedAt: previous.serverSyncedAt, serverSyncedBy: previous.serverSyncedBy } : session);
+  };
   if (rows?.length) transaction.objectStore("chunks").put({ sessionId: session.id, sequence, rows });
   await done;
 }
@@ -64,6 +70,26 @@ export async function getResearchChunks(sessionId) {
   return request.result.sort((a, b) => a.sequence - b.sequence);
 }
 
+export async function getResearchGameSummaryMarker(sessionId) {
+  const database = await openResearchDatabase();
+  const transaction = database.transaction("chunks", "readonly");
+  const done = transactionDone(transaction);
+  const request = transaction.objectStore("chunks").index("sessionId").openCursor(IDBKeyRange.only(sessionId));
+  let marker = null;
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (!cursor) return;
+    for (const row of cursor.value.rows || []) {
+      if (!row.startsWith('"event",')) continue;
+      const match = row.match(/"(game_\d+_end_trials_\d+_correct_\d+_errors_\d+_mean_rt_\d+ms)"/);
+      if (match) marker = match[1];
+    }
+    cursor.continue();
+  };
+  await done;
+  return marker;
+}
+
 export async function deleteResearchSession(sessionId) {
   const database = await openResearchDatabase();
   const transaction = database.transaction(["sessions", "chunks"], "readwrite");
@@ -75,6 +101,52 @@ export async function deleteResearchSession(sessionId) {
     if (cursor) {
       transaction.objectStore("chunks").delete(cursor.primaryKey);
       cursor.continue();
+    }
+  };
+  await done;
+}
+
+export async function pruneResearchRawData(session) {
+  const database = await openResearchDatabase();
+  const transaction = database.transaction(["sessions", "chunks"], "readwrite");
+  const done = transactionDone(transaction);
+  transaction.objectStore("sessions").put({ ...session, rawDeleted: true });
+  const request = transaction.objectStore("chunks").index("sessionId").openKeyCursor(IDBKeyRange.only(session.id));
+  request.onsuccess = () => {
+    const cursor = request.result;
+    if (cursor) {
+      transaction.objectStore("chunks").delete(cursor.primaryKey);
+      cursor.continue();
+    }
+  };
+  await done;
+}
+
+export async function saveResearchSummary(sessionId, summary, gameSummary) {
+  const database = await openResearchDatabase();
+  const transaction = database.transaction("sessions", "readwrite");
+  const done = transactionDone(transaction);
+  const store = transaction.objectStore("sessions");
+  const request = store.get(sessionId);
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current && current.status !== "recording" && !current.summary) {
+      store.put({ ...current, gameSummary: gameSummary || current.gameSummary || null, summary, serverSyncedAt: null, serverSyncedBy: null });
+    }
+  };
+  await done;
+}
+
+export async function markResearchSummarySynced(sessionId, summary, email, uploadedAt) {
+  const database = await openResearchDatabase();
+  const transaction = database.transaction("sessions", "readwrite");
+  const done = transactionDone(transaction);
+  const store = transaction.objectStore("sessions");
+  const request = store.get(sessionId);
+  request.onsuccess = () => {
+    const current = request.result;
+    if (current?.summary && JSON.stringify(current.summary) === JSON.stringify(summary)) {
+      store.put({ ...current, serverSyncedAt: uploadedAt, serverSyncedBy: email });
     }
   };
   await done;

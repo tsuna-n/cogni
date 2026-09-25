@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ResearchSession from "@/app/components/ResearchSession";
 import ResearchDashboard from "@/app/components/ResearchDashboard";
+import AdminPanel from "@/app/components/AdminPanel";
 import { LINE_WINDOW_SAMPLES, summarizeEegWindow } from "@/lib/eeg-signal-quality.mjs";
-import { TH } from "@/lib/th-dict";
+import { localizeText, startLocalization } from "@/lib/localization";
 
 const AUTH_ERRORS = {
   invalid_email: "รูปแบบอีเมลไม่ถูกต้อง / Invalid email address",
@@ -22,8 +23,13 @@ const AUTH_ERRORS = {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Home() {
+  const [locale, setLocale] = useState("th");
+  const localeRef = useRef("th");
+  const localizationRef = useRef(null);
   const [authed, setAuthed] = useState(null);
   const [account, setAccount] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [mode, setMode] = useState("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -33,6 +39,24 @@ export default function Home() {
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const alertUser = (message) => window.alert(localizeText(message, localeRef.current));
+
+  useEffect(() => {
+    localizationRef.current = startLocalization(() => localeRef.current);
+    const saved = localStorage.getItem("cogni_locale");
+    setLocale(saved === "th" || saved === "en" ? saved : navigator.language.toLowerCase().startsWith("th") ? "th" : "en");
+    return () => localizationRef.current?.stop();
+  }, []);
+
+  useEffect(() => {
+    localeRef.current = locale;
+    document.documentElement.lang = locale;
+    document.querySelector('meta[name="description"]')?.setAttribute("content", locale === "th" ? "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV" : "Muse 2 EEG research workspace with baseline, task, rest, event markers, and CSV export.");
+    localStorage.setItem("cogni_locale", locale);
+    localizationRef.current?.refresh();
+    window.renderDashboard?.();
+    window.renderHistory?.();
+  }, [locale]);
 
   const clearFormError = () => {
     setAuthError(false);
@@ -99,7 +123,7 @@ export default function Home() {
       setPassword("");
       setConfirm("");
       setFullName("");
-      window.__enterApp?.(data.user.email, data.user.name, true);
+      window.__enterApp?.(data.user.email, data.user.name, true, data.user.role);
     } catch {
       setAuthError(true);
       setAuthMessage("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ / Cannot reach the server");
@@ -215,30 +239,6 @@ export default function Home() {
     drawEEG();
     makeFeatures();
 
-    /* ---------- i18n ---------- */
-    let currentLang = "en";
-    const originals = new WeakMap();
-    function translateNode(node, toThai) {
-      if (node.nodeType === 3) {
-        let s = node.nodeValue.trim();
-        if (!s) return;
-        if (!originals.has(node)) originals.set(node, node.nodeValue);
-        const orig = originals.get(node);
-        const key = orig.trim();
-        if (toThai && TH[key]) node.nodeValue = orig.replace(key, TH[key]);
-        else node.nodeValue = orig;
-      } else if (node.nodeType === 1 && !["SCRIPT", "STYLE"].includes(node.tagName)) {
-        [...node.childNodes].forEach((n) => translateNode(n, toThai));
-      }
-    }
-    function toggleLang() {
-      currentLang = currentLang === "en" ? "th" : "en";
-      translateNode(document.body, currentLang === "th");
-      const btn = $("langBtn");
-      if (btn) btn.textContent = currentLang === "th" ? "English" : "ไทย";
-      document.documentElement.lang = currentLang;
-    }
-
     /* ---------- Mini-Cog / games (free play) ---------- */
     function miniCogInterpret() {
       let v = Number($("mcscore").value),
@@ -278,11 +278,11 @@ export default function Home() {
     }
     function startGame(n) {
       if (window.__studyPhase && window.__studyPhase !== "task") {
-        alert("เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase");
+        alertUser("เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase");
         return;
       }
       if (window.__studyPhase === "task" && window.__studyGameId !== n) {
-        alert("รอบทดลองนี้กำหนดเกมอื่นไว้ กรุณาใช้เกมที่เลือกก่อนเริ่มบันทึก");
+        alertUser("รอบทดลองนี้กำหนดเกมอื่นไว้ กรุณาใช้เกมที่เลือกก่อนเริ่มบันทึก");
         return;
       }
       if (window.__studyPhase === "task" && currentFreeGame) return;
@@ -450,6 +450,9 @@ export default function Home() {
           const data = await res.json();
           if (data?.user?.email) {
             initApp(data.user.email, data.user.name, false);
+            setAccount(String(data.user.name || data.user.email));
+            setAccountEmail(data.user.email);
+            setIsAdmin(data.user.role === "admin");
             setAuthed(true);
             return;
           }
@@ -458,19 +461,25 @@ export default function Home() {
       setAuthed(false);
     }
     async function logoutUser() {
-      if (window.__studyUnexported && !window.confirm("มีข้อมูลการทดลองที่ยังไม่ได้ส่งออก ต้องการออกจากระบบหรือไม่?")) return;
+      if (window.__studyUnexported && !window.confirm(localizeText("มีข้อมูลการทดลองที่ยังไม่ได้ส่งออก ต้องการออกจากระบบหรือไม่?", localeRef.current))) return;
       if (museConnected) await disconnectMuse();
       try {
         await fetch("/api/auth/logout", { method: "POST" });
       } catch {}
       sessionStorage.removeItem("cogni_login");
       sessionStorage.removeItem("cogni_name");
+      showSection("journey");
       setAccount("");
+      setAccountEmail("");
+      setIsAdmin(false);
       setAuthed(false);
     }
-    window.__enterApp = (accountEmail, displayName, fresh) => {
-      initApp(accountEmail, displayName, fresh);
-      setAccount(String(displayName || accountEmail || ""));
+    window.__enterApp = (emailAddress, displayName, fresh, role) => {
+      initApp(emailAddress, displayName, fresh);
+      showSection("journey");
+      setAccount(String(displayName || emailAddress || ""));
+      setAccountEmail(emailAddress);
+      setIsAdmin(role === "admin");
       setAuthed(true);
     };
     restoreSession();
@@ -508,11 +517,11 @@ export default function Home() {
       const id = $("jpId").value.trim();
       const age = Number($("jpAge").value);
       if (!id) {
-        alert("กรุณากรอกรหัสผู้เข้าร่วม / Please enter a Participant ID");
+        alertUser("กรุณากรอกรหัสผู้เข้าร่วม / Please enter a Participant ID");
         return;
       }
       if (!Number.isFinite(age) || age < 10 || age > 120) {
-        alert("อายุต้องเป็นตัวเลขระหว่าง 10–120 / Age must be a number between 10–120");
+        alertUser("อายุต้องเป็นตัวเลขระหว่าง 10–120 / Age must be a number between 10–120");
         return;
       }
       journey.profile = {
@@ -558,7 +567,7 @@ export default function Home() {
         total += v;
       });
       if (!valid) {
-        alert("Invalid score / คะแนนไม่ถูกต้อง");
+        alertUser("Invalid score / คะแนนไม่ถูกต้อง");
         return null;
       }
       let max = edu === "none" ? 23 : 30,
@@ -666,7 +675,7 @@ export default function Home() {
             (c) =>
               `<tr><td>${c.name}</td><td>${c.samples ? c.mean + " µV" : "—"}</td><td>${c.samples ? c.sd + " µV" : "—"}</td><td>${c.samples ? c.min + "–" + c.max + " µV" : "—"}</td></tr>`
           )
-          .join("")}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString()} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
+          .join("")}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
       } else {
         baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><p class="muted">ยังไม่ได้บันทึก Baseline — เชื่อมต่อ Muse 2 แล้วกด Start 30-sec Baseline ที่ส่วนบน / Baseline not recorded — connect Muse 2 and start the 30-second baseline above.</p></div>`;
       }
@@ -714,9 +723,9 @@ export default function Home() {
         dn = $("riskDonut"),
         dt = $("riskDonutText");
       rb.className = "risk-banner " + (r ? "risk-" + r.level : "");
-      rb.textContent = r ? r.label + " — " + r.text : "Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง";
-      dt.textContent = r ? r.label : "No data";
-      $("riskExplain").textContent = r ? r.text : "";
+      rb.textContent = r ? localizeText(r.label, localeRef.current) + " — " + localizeText(r.text, localeRef.current) : localizeText("Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง", localeRef.current);
+      dt.textContent = r ? localizeText(r.label, localeRef.current) : localizeText("No data", localeRef.current);
+      $("riskExplain").textContent = r ? localizeText(r.text, localeRef.current) : "";
       if (r) {
         dn.style.background =
           r.level === "green" ? "conic-gradient(#4bd28b 0 100%,#243449 0)" : r.level === "yellow" ? "conic-gradient(#f1c84c 0 100%,#243449 0)" : "conic-gradient(#ef6672 0 100%,#243449 0)";
@@ -733,7 +742,7 @@ export default function Home() {
         logs
           .slice(-5)
           .reverse()
-          .map((x) => `<div>${new Date(x).toLocaleString()}</div>`)
+          .map((x) => `<div>${new Date(x).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")}</div>`)
           .join("") || "—";
     }
     function csvEscape(v) {
@@ -810,7 +819,7 @@ export default function Home() {
           let s = a.screen || {},
             g = a.games || [],
             lvl = s.total == null ? "—" : s.total <= s.cut ? "🔴 Red / แดง" : s.total - s.cut <= 3 ? "🟡 Yellow / เหลือง" : "🟢 Green / เขียว";
-          return `<tr><td>${a.date ? new Date(a.date).toLocaleString() : "—"}</td><td>${a.profile?.id || "—"}</td><td>${s.total != null ? s.total + "/" + s.max : "—"}</td><td>${lvl}</td><td>${g[0]?.accuracy ?? "—"}%</td><td>${g[1]?.accuracy ?? "—"}%</td><td>${g[2]?.accuracy ?? "—"}%</td></tr>`;
+          return `<tr><td>${a.date ? new Date(a.date).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US") : "—"}</td><td>${a.profile?.id || "—"}</td><td>${s.total != null ? s.total + "/" + s.max : "—"}</td><td>${lvl}</td><td>${g[0]?.accuracy ?? "—"}%</td><td>${g[1]?.accuracy ?? "—"}%</td><td>${g[2]?.accuracy ?? "—"}%</td></tr>`;
         })
         .join("")}</table></div>`;
     }
@@ -925,7 +934,7 @@ export default function Home() {
       rafId = requestAnimationFrame(loop);
     });
 
-    const secureOK = location.hostname === "localhost" || location.protocol === "https:";
+    const secureOK = window.isSecureContext;
     const chromeOK = /Chrome\//.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent);
     const linuxDesktop = /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
     const webBluetoothUnavailableMessage = linuxDesktop
@@ -1302,7 +1311,7 @@ export default function Home() {
         window.dispatchEvent(new Event("research-task-screen-left"));
         return;
       }
-      document.querySelectorAll("main section").forEach((s) => s.classList.toggle("active", s.id === id));
+      document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("active", s.id === id));
       const nav = document.getElementById("mainNav");
       if (nav) nav.querySelectorAll("[data-sec]").forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
       if (id === "dashboard") window.dispatchEvent(new Event("research-dashboard-opened"));
@@ -1339,7 +1348,6 @@ export default function Home() {
     /* ---------- expose globals (used by innerHTML-generated handlers) ---------- */
     Object.assign(window, {
       logoutUser,
-      toggleLang,
       showSection,
       exportCSV,
       simulate,
@@ -1418,6 +1426,7 @@ export default function Home() {
           <div className="brand" style={{ fontSize: "26px" }}>
             CogniLoad<span>-XAI</span>
           </div>
+          <button type="button" className="secondary" lang={locale === "th" ? "en" : "th"} aria-label={locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"} onClick={() => setLocale(locale === "th" ? "en" : "th")}>{locale === "th" ? "English" : "ไทย"}</button>
           <p className="muted" style={{ margin: "4px 0 0" }}>Cognitive Assessment System / ระบบประเมินการรู้คิด</p>
           <div className="auth-card">
             <h2 id="authTitle">{mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Register / สมัครสมาชิก"}</h2>
@@ -1521,8 +1530,8 @@ export default function Home() {
           </div>
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <div className="badge" id="studyLiveBadge">Muse EEG Research Workspace</div>
-            <button className="secondary" id="langBtn" onClick={() => call("toggleLang")}>
-              ไทย
+            <button type="button" className="secondary" id="langBtn" lang={locale === "th" ? "en" : "th"} aria-label={locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"} onClick={() => setLocale(locale === "th" ? "en" : "th")}>
+              {locale === "th" ? "English" : "ไทย"}
             </button>
             {account && <div className="badge">👤 {account}</div>}
             <button className="secondary" onClick={() => call("logoutUser")}>
@@ -1537,6 +1546,7 @@ export default function Home() {
               ["dashboard", "📊 Dashboard / แดชบอร์ด"],
               ["games", "🎮 Tasks / ภารกิจ"],
               ["history", "🕘 Assessment history / ประวัติเดิม"],
+              ...(isAdmin ? [["admin", "🔐 Admin / ผู้ดูแล"]] : []),
             ].map(([sec, label]) => (
               <button key={sec} data-sec={sec} className={sec === "journey" ? "active" : ""} onClick={() => call("showSection", sec)}>
                 {label}
@@ -1554,7 +1564,7 @@ export default function Home() {
                 </div>
                 <span className="pill">Research use · ไม่ใช่การวินิจฉัย</span>
               </div>
-              <ResearchSession />
+              <ResearchSession locale={locale} enabled={authed === true} accountEmail={accountEmail} />
               <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)", display: "none" }}>
                 <div className="card metric">
                   <small>1</small>
@@ -1702,6 +1712,8 @@ export default function Home() {
             </section>
 
             {/* ---------- Dashboard ---------- */}
+            {isAdmin && <section id="admin"><div className="hero"><div><h1>{locale === "th" ? "จัดการข้อมูลผู้เข้าร่วม" : "Participant data"}</h1><p>{locale === "th" ? "ดูผลสรุปที่ซิงก์จากทุกบัญชีผู้วิจัย" : "View summaries synced by all researcher accounts"}</p></div></div><AdminPanel locale={locale} enabled={authed === true && isAdmin} /></section>}
+
             <section id="dashboard">
               <div className="hero">
                 <div>
@@ -1709,7 +1721,7 @@ export default function Home() {
                   <p>ภาพรวมข้อมูล EEG จากรอบทดลองที่บันทึกในเบราว์เซอร์นี้</p>
                 </div>
               </div>
-              <ResearchDashboard />
+              <ResearchDashboard locale={locale} />
               <details className="study-legacy">
                 <summary>ผลแบบประเมินเดิม / Existing assessment overview</summary>
                 <div className="controls"><button onClick={() => call("exportCSV")}>Export assessment CSV</button></div>
@@ -1861,7 +1873,7 @@ export default function Home() {
                       </tr>
                     </tbody>
                   </table>
-                  <button onClick={() => alert("Demo preprocessing completed.")}>Run Preprocessing</button>
+                  <button onClick={() => alertUser("Demo preprocessing completed.")}>Run Preprocessing</button>
                 </div>
                 <div className="card">
                   <h3>Quality Control</h3>
