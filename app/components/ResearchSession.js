@@ -10,6 +10,8 @@ const PHASES = [
   { key: "rest", label: "Rest / พักหลังงาน" },
 ];
 const SAMPLE_RATE = 256;
+const BASELINE_SECONDS = 30;
+const POST_TASK_SECONDS = 30;
 const PROTOCOL_VERSION = "alz_web_games_v1";
 const GAMES = [
   { id: 1, name: "Odd or Even / คี่หรือคู่" },
@@ -33,7 +35,7 @@ export default function ResearchSession() {
   const [studyGroup, setStudyGroup] = useState("");
   const [gameId, setGameId] = useState(1);
   const [condition, setCondition] = useState("standard");
-  const [durations, setDurations] = useState([30, 60, 30]);
+  const [taskSeconds, setTaskSeconds] = useState(60);
   const [consent, setConsent] = useState(false);
   const [ready, setReady] = useState(false);
   const [liveRailPercents, setLiveRailPercents] = useState([0, 0, 0, 0]);
@@ -145,6 +147,10 @@ export default function ResearchSession() {
 
   function advance() {
     if (!activeRef.current) return;
+    if (phaseRef.current === 1) {
+      // The task can end early; keep the exported duration aligned with its markers.
+      dataRef.current.durations[1] = Math.round((performance.now() - phaseStartedRef.current)) / 1000;
+    }
     if (phaseRef.current === 1) window.dispatchEvent(new Event("research-task-ended"));
     const boundaryMs = Date.now();
     addMarker(PHASES[phaseRef.current].key + "_end", PHASES[phaseRef.current].key, boundaryMs);
@@ -278,10 +284,14 @@ export default function ResearchSession() {
     const onTaskScreenLeft = () => {
       if (activeRef.current && phaseRef.current === 1) finishRef.current("task_screen_left");
     };
+    const onTaskComplete = () => {
+      if (activeRef.current && phaseRef.current === 1) advanceRef.current();
+    };
     window.addEventListener("muse-study-status", onStatus);
     window.addEventListener("muse-study-reading", onReading);
     window.addEventListener("research-task-marker", onTaskMarker);
     window.addEventListener("research-task-screen-left", onTaskScreenLeft);
+    window.addEventListener("research-task-complete", onTaskComplete);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onPageHide);
     return () => {
@@ -290,6 +300,7 @@ export default function ResearchSession() {
       window.removeEventListener("muse-study-reading", onReading);
       window.removeEventListener("research-task-marker", onTaskMarker);
       window.removeEventListener("research-task-screen-left", onTaskScreenLeft);
+      window.removeEventListener("research-task-complete", onTaskComplete);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
     };
@@ -347,15 +358,11 @@ export default function ResearchSession() {
         return;
       }
     }
-    if (!testMode && durations.some((value) => !Number.isInteger(Number(value)) || Number(value) < 5 || Number(value) > 600)) {
-      setMessage("แต่ละช่วงต้องอยู่ระหว่าง 5–600 วินาที");
+    if (!testMode && (!Number.isInteger(Number(taskSeconds)) || Number(taskSeconds) < 5 || Number(taskSeconds) > 540)) {
+      setMessage("ช่วงทำกิจกรรมต้องอยู่ระหว่าง 5–540 วินาที");
       return;
     }
-    if (!testMode && durations.reduce((sum, value) => sum + Number(value), 0) > 600) {
-      setMessage("เวลารวมของรอบทดลองต้องไม่เกิน 600 วินาที เพื่อให้ส่งออกข้อมูลในเบราว์เซอร์ได้");
-      return;
-    }
-    const startedMs = Date.now();
+    let startedMs = Date.now();
     const data = {
       id: crypto.randomUUID(),
       participant: cleanParticipant,
@@ -369,7 +376,7 @@ export default function ResearchSession() {
       testMode,
       startedMs,
       phaseStarts: [startedMs],
-      durations: testMode ? [5, 5, 5] : durations.map(Number),
+      durations: testMode ? [5, 5, 5] : [BASELINE_SECONDS, Number(taskSeconds), POST_TASK_SECONDS],
       rows: [],
       samples: 0,
       channels: [0, 0, 0, 0],
@@ -395,6 +402,10 @@ export default function ResearchSession() {
       return;
     }
     setBusy(false);
+    startedMs = Date.now();
+    data.startedMs = startedMs;
+    data.phaseStarts[0] = startedMs;
+    data.lastPacketMs = startedMs;
     window.dispatchEvent(new Event("research-task-ended"));
     dataRef.current = data;
     phaseRef.current = 0;
@@ -475,7 +486,7 @@ export default function ResearchSession() {
   const data = dataRef.current;
   const hasFinished = status !== "idle" && status !== "recording";
   const remaining = status === "recording" ? Math.max(0, Math.ceil((data?.durations[phaseIndex] || 0) - clock)) : 0;
-  const shownDurations = data?.durations || durations;
+  const shownDurations = data?.durations || [BASELINE_SECONDS, taskSeconds, POST_TASK_SECONDS];
   const totalDuration = shownDurations.map(Number).reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
   const elapsedPrevious = data?.durations.slice(0, phaseIndex).reduce((sum, value) => sum + value, 0) || 0;
   const progress = status === "recording" && totalDuration ? Math.min(100, ((elapsedPrevious + clock) / totalDuration) * 100) : status === "complete" ? 100 : data && totalDuration ? Math.min(100, (((data.endedMs || data.lastPacketMs) - data.startedMs) / 1000 / totalDuration) * 100) : 0;
@@ -493,16 +504,18 @@ export default function ResearchSession() {
           <label>เงื่อนไขการทดลอง<input value={condition} onChange={(e) => setCondition(e.target.value)} placeholder="standard" maxLength={80} disabled={status !== "idle"} /></label>
         </div>
         <div className="study-durations">
-          {PHASES.map((phase, index) => <label key={phase.key}>{phase.label}<span><input type="number" min="5" max="600" value={durations[index]} disabled={status !== "idle"} onChange={(e) => setDurations((prev) => prev.map((value, i) => i === index ? e.target.value : value))} /> วินาที</span></label>)}
+          <label>{PHASES[0].label}<span>{BASELINE_SECONDS} วินาที</span></label>
+          <label>{PHASES[1].label}<span><input type="number" min="5" max="540" value={taskSeconds} disabled={status !== "idle"} onChange={(e) => setTaskSeconds(e.target.value)} /> วินาทีสูงสุด</span></label>
+          <label>{PHASES[2].label}<span>{POST_TASK_SECONDS} วินาที</span></label>
         </div>
-        <p className="muted" style={{ fontSize: "12px", margin: "10px 0 0" }}>กำหนดกลุ่มตามเกณฑ์รับสมัครของโครงการ · ใช้เกมและเวลาช่วงเดียวกันทั้งสองกลุ่ม · หนึ่งเกมต่อหนึ่งรอบ · เวลารวมสูงสุด 600 วินาที</p>
+        <p className="muted" style={{ fontSize: "12px", margin: "10px 0 0" }}>EEG บันทึกต่อเนื่อง: พักนิ่ง 30 วินาที → ทำกิจกรรมจนกว่าจะกดจบหรือครบเวลาที่ตั้ง → พักหลังงานอีก 30 วินาที · หนึ่งเกมต่อหนึ่งรอบ · เวลารวมสูงสุด 600 วินาที</p>
         <label className="study-consent"><input type="checkbox" checked={consent} disabled={status !== "idle"} onChange={(e) => setConsent(e.target.checked)} /> <span>ผู้วิจัยยืนยันว่าได้รับความยินยอมตามขั้นตอนของโครงการแล้ว</span></label>
       </div>
 
       <div className="card study-card">
-        <div className="study-heading"><div><span className="study-kicker">02 · RECORDING</span><h2>ดำเนินการทดลอง</h2><p className="muted">Baseline → Task → Rest · เกมที่เลือกจะเปิดเองเมื่อเริ่ม Task และหยุดเมื่อหมดเวลา</p></div><span className={ready ? liveRailPercents.some((value) => value >= 1) ? "pill study-warn" : "pill study-ready" : "pill"}>{ready ? liveRailPercents.some((value) => value >= 1) ? "● EEG ครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์" : "● EEG ครบ 4 ช่อง" : "○ รอ EEG ครบ 4 ช่อง"}</span></div>
+        <div className="study-heading"><div><span className="study-kicker">02 · RECORDING</span><h2>ดำเนินการทดลอง</h2><p className="muted">EEG บันทึกตลอด Baseline 30 วินาที → Task → Rest 30 วินาที · เกมเปิดเองเมื่อเริ่ม Task</p></div><span className={ready ? liveRailPercents.some((value) => value >= 1) ? "pill study-warn" : "pill study-ready" : "pill"}>{ready ? liveRailPercents.some((value) => value >= 1) ? "● EEG ครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์" : "● EEG ครบ 4 ช่อง" : "○ รอ EEG ครบ 4 ช่อง"}</span></div>
         {ready && liveRailPercents.some((value) => value >= 1) && <p className="study-signal-warning" role="alert">สัญญาณล่าสุด 3 วินาทีชนขอบ: {CHANNELS.map((name, index) => `${name} ${liveRailPercents[index].toFixed(1)}%`).join(" · ")} · ปรับเซนเซอร์ก่อนเริ่มรอบผู้เข้าร่วม</p>}
-        <div className="study-phase-grid">{PHASES.map((phase, index) => <div className={"study-phase" + (status === "recording" && phaseIndex === index ? " current" : "")} key={phase.key}><small>0{index + 1}</small><strong>{phase.label}</strong><span>{shownDurations[index]} วินาที</span></div>)}</div>
+        <div className="study-phase-grid">{PHASES.map((phase, index) => <div className={"study-phase" + (status === "recording" && phaseIndex === index ? " current" : "")} key={phase.key}><small>0{index + 1}</small><strong>{phase.label}</strong><span>{index === 1 && phaseIndex > 1 ? shownDurations[index].toFixed(1) : shownDurations[index]} วินาที</span></div>)}</div>
         <div className="study-runbar"><div style={{ width: `${progress}%` }} /></div>
         <div className="study-run-status"><strong>{runLabel}</strong><span>{status === "recording" ? `เหลือ ${remaining} วินาที` : data ? `${data.samples.toLocaleString()} samples · ${data.events} markers` : "ยังไม่มีข้อมูลในรอบนี้"}</span></div>
         <div className="controls">

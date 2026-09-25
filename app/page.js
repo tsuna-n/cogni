@@ -397,15 +397,22 @@ export default function Home() {
       currentFreeGame = 0;
       acceptingResponse = false;
       gameRunId++;
+      const finishTaskBtn = $("finishTaskBtn");
+      if (finishTaskBtn) finishTaskBtn.hidden = true;
       const box = $("gamebox");
-      if (box) box.innerHTML = '<span class="muted">Task phase finished / สิ้นสุดช่วงภารกิจ</span>';
+      if (box) box.innerHTML = '<span class="muted">กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก 30 วินาที / Recording 30 more seconds</span>';
     };
     const onResearchTaskStart = (event) => {
       const selectedGame = Number(event.detail?.gameId);
       if (![1, 2, 3].includes(selectedGame)) return;
       showSection("games");
       startGame(selectedGame);
+      const finishTaskBtn = $("finishTaskBtn");
+      if (finishTaskBtn) finishTaskBtn.hidden = false;
     };
+    const onFinishTaskClick = () => window.dispatchEvent(new Event("research-task-complete"));
+    const finishTaskBtn = $("finishTaskBtn");
+    finishTaskBtn?.addEventListener("click", onFinishTaskClick);
     window.addEventListener("research-task-ended", onResearchTaskEnded);
     window.addEventListener("research-task-start", onResearchTaskStart);
     const onResearchSessionFinished = () => showSection("journey");
@@ -1370,6 +1377,7 @@ export default function Home() {
       window.removeEventListener("research-task-ended", onResearchTaskEnded);
       window.removeEventListener("research-task-start", onResearchTaskStart);
       window.removeEventListener("research-session-finished", onResearchSessionFinished);
+      finishTaskBtn?.removeEventListener("click", onFinishTaskClick);
       if (installBtn) installBtn.removeEventListener("click", onInstallClick);
     };
   }, []);
@@ -2003,6 +2011,7 @@ export default function Home() {
                   >
                     <span className="muted">Choose a game / เลือกเกม</span>
                   </div>
+                  <div className="controls"><button id="finishTaskBtn" type="button" className="secondary" hidden>จบกิจกรรม · เก็บ EEG ต่อ 30 วินาที</button></div>
                 </div>
                 <div className="card">
                   <h3>Digital biomarkers / ตัวชี้วัดดิจิทัล</h3>
