@@ -4,18 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import ResearchSession from "@/app/components/ResearchSession";
 import ResearchDashboard from "@/app/components/ResearchDashboard";
 import AdminPanel from "@/app/components/AdminPanel";
-import { LINE_WINDOW_SAMPLES, summarizeEegWindow } from "@/lib/eeg-signal-quality.mjs";
+import {
+  LINE_WINDOW_SAMPLES,
+  summarizeEegWindow,
+} from "@/lib/eeg-signal-quality.mjs";
 import { localizeText, startLocalization } from "@/lib/localization";
 
 const AUTH_ERRORS = {
   invalid_email: "รูปแบบอีเมลไม่ถูกต้อง / Invalid email address",
-  weak_password: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร / Password must be at least 8 characters",
+  weak_password:
+    "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร / Password must be at least 8 characters",
   email_taken: "อีเมลนี้ถูกใช้แล้ว / This email is already registered",
-  registration_disabled: "ระบบปิดการสมัครสมาชิก กรุณาติดต่อผู้ดูแล / Registration is closed. Contact the administrator.",
-  invalid_name: "ชื่อยาวเกินไป (สูงสุด 80 ตัวอักษร) / Name is too long (max 80 characters)",
-  invalid_credentials: "อีเมลหรือรหัสผ่านไม่ถูกต้อง / Incorrect email or password",
+  registration_disabled:
+    "ระบบปิดการสมัครสมาชิก กรุณาติดต่อผู้ดูแล / Registration is closed. Contact the administrator.",
+  invalid_name:
+    "ชื่อยาวเกินไป (สูงสุด 80 ตัวอักษร) / Name is too long (max 80 characters)",
+  invalid_credentials:
+    "อีเมลหรือรหัสผ่านไม่ถูกต้อง / Incorrect email or password",
   missing_credentials: "กรุณากรอกอีเมลและรหัสผ่าน / Enter email and password",
-  rate_limited: "พยายามหลายครั้งเกินไป กรุณารอสักครู่ / Too many attempts, please wait a moment",
+  rate_limited:
+    "พยายามหลายครั้งเกินไป กรุณารอสักครู่ / Too many attempts, please wait a moment",
   invalid_body: "ข้อมูลไม่ถูกต้อง / Invalid request",
   storage_unavailable:
     "พื้นที่จัดเก็บของเซิร์ฟเวอร์ไม่พร้อมใช้งาน กรุณาตรวจการเชื่อมต่อฐานข้อมูลหรือพื้นที่จัดเก็บ / Server storage is unavailable. Check the database connection or storage.",
@@ -42,31 +50,43 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [appConfig, setAppConfig] = useState(null);
   const [configError, setConfigError] = useState("");
-  const alertUser = (message) => window.alert(localizeText(message, localeRef.current));
+  const alertUser = (message) =>
+    window.alert(localizeText(message, localeRef.current));
 
   useEffect(() => {
     localizationRef.current = startLocalization(() => localeRef.current);
     const saved = localStorage.getItem("cogni_locale");
-    setLocale(saved === "th" || saved === "en" ? saved : navigator.language.toLowerCase().startsWith("th") ? "th" : "en");
+    setLocale(
+      saved === "th" || saved === "en"
+        ? saved
+        : navigator.language.toLowerCase().startsWith("th")
+          ? "th"
+          : "en",
+    );
     return () => localizationRef.current?.stop();
   }, []);
 
   useEffect(() => {
     let active = true;
     const loadConfig = () => {
-      fetch("/api/config", { cache: "no-store" }).then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-      }).then((config) => {
-        if (!active) return;
-        setAppConfig(config);
-        if (!config.registrationEnabled) setMode("login");
-        setConfigError("");
-      }).catch((error) => {
-        if (!active) return;
-        setAppConfig(null);
-        setConfigError(`โหลดการตั้งค่าไม่ได้ / Cannot load settings (${error.message})`);
-      });
+      fetch("/api/config", { cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((config) => {
+          if (!active) return;
+          setAppConfig(config);
+          if (!config.registrationEnabled) setMode("login");
+          setConfigError("");
+        })
+        .catch((error) => {
+          if (!active) return;
+          setAppConfig(null);
+          setConfigError(
+            `โหลดการตั้งค่าไม่ได้ / Cannot load settings (${error.message})`,
+          );
+        });
     };
     loadConfig();
     window.addEventListener("focus", loadConfig);
@@ -81,7 +101,14 @@ export default function Home() {
   useEffect(() => {
     localeRef.current = locale;
     document.documentElement.lang = locale;
-    document.querySelector('meta[name="description"]')?.setAttribute("content", locale === "th" ? "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV" : "Muse 2 EEG research workspace with baseline, task, rest, event markers, and CSV export.");
+    document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute(
+        "content",
+        locale === "th"
+          ? "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV"
+          : "Muse 2 EEG research workspace with baseline, task, rest, event markers, and CSV export.",
+      );
     localStorage.setItem("cogni_locale", locale);
     localizationRef.current?.refresh();
     window.renderDashboard?.();
@@ -94,7 +121,12 @@ export default function Home() {
   };
 
   const switchMode = (next) => {
-    if (busy || next === mode || (next === "register" && !appConfig?.registrationEnabled)) return;
+    if (
+      busy ||
+      next === mode ||
+      (next === "register" && !appConfig?.registrationEnabled)
+    )
+      return;
     setMode(next);
     setPassword("");
     setConfirm("");
@@ -108,7 +140,9 @@ export default function Home() {
     const trimmedName = fullName.trim();
     if (!trimmedEmail || !password || (mode === "register" && !confirm)) {
       setAuthError(true);
-      setAuthMessage("กรุณากรอกข้อมูลให้ครบถ้วน / Please fill in all required fields");
+      setAuthMessage(
+        "กรุณากรอกข้อมูลให้ครบถ้วน / Please fill in all required fields",
+      );
       return;
     }
     if (mode === "register") {
@@ -148,13 +182,21 @@ export default function Home() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setAuthError(true);
-        setAuthMessage(AUTH_ERRORS[data.error] || "ดำเนินการไม่สำเร็จ / Something went wrong");
+        setAuthMessage(
+          AUTH_ERRORS[data.error] ||
+            "ดำเนินการไม่สำเร็จ / Something went wrong",
+        );
         return;
       }
       setPassword("");
       setConfirm("");
       setFullName("");
-      window.__enterApp?.(data.user.email, data.user.name, true, data.user.role);
+      window.__enterApp?.(
+        data.user.email,
+        data.user.name,
+        true,
+        data.user.role,
+      );
     } catch {
       setAuthError(true);
       setAuthMessage("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ / Cannot reach the server");
@@ -170,9 +212,27 @@ export default function Home() {
     const ctx = c.getContext("2d");
     let raf = 0;
     const layers = [
-      { color: "rgba(51,214,255,.5)", amp: 46, speed: 0.9, freq: 1.6, width: 2 },
-      { color: "rgba(155,123,255,.35)", amp: 30, speed: 1.4, freq: 2.4, width: 1.5 },
-      { color: "rgba(79,224,161,.22)", amp: 22, speed: 0.6, freq: 3.2, width: 1 },
+      {
+        color: "rgba(51,214,255,.5)",
+        amp: 46,
+        speed: 0.9,
+        freq: 1.6,
+        width: 2,
+      },
+      {
+        color: "rgba(155,123,255,.35)",
+        amp: 30,
+        speed: 1.4,
+        freq: 2.4,
+        width: 1.5,
+      },
+      {
+        color: "rgba(79,224,161,.22)",
+        amp: 22,
+        speed: 0.6,
+        freq: 3.2,
+        width: 1,
+      },
     ];
     const draw = (t) => {
       const w = c.width,
@@ -214,7 +274,11 @@ export default function Home() {
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let x = 0; x < c.width; x++) {
-        let y = 110 + 24 * Math.sin((x + seed) / 13) + 10 * Math.sin((x + seed) / 4.3) + 7 * Math.sin((x + seed) / 2.1);
+        let y =
+          110 +
+          24 * Math.sin((x + seed) / 13) +
+          10 * Math.sin((x + seed) / 4.3) +
+          7 * Math.sin((x + seed) / 2.1);
         y += (Math.random() - 0.5) * 9;
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
@@ -249,11 +313,24 @@ export default function Home() {
         ["Theta power", (Math.random() * 2 + 1).toFixed(3), "Band power"],
         ["Alpha power", (Math.random() * 2 + 1).toFixed(3), "Band power"],
         ["Beta power", (Math.random() * 2 + 0.7).toFixed(3), "Band power"],
-        ["Theta/Alpha", (Math.random() * 0.8 + 0.7).toFixed(3), "Workload-related ratio"],
-        ["Theta/Beta", (Math.random() * 0.7 + 0.5).toFixed(3), "Spectral ratio"],
+        [
+          "Theta/Alpha",
+          (Math.random() * 0.8 + 0.7).toFixed(3),
+          "Workload-related ratio",
+        ],
+        [
+          "Theta/Beta",
+          (Math.random() * 0.7 + 0.5).toFixed(3),
+          "Spectral ratio",
+        ],
       ];
       const rows = $("featureRows");
-      if (rows) rows.innerHTML = f.map((x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`).join("");
+      if (rows)
+        rows.innerHTML = f
+          .map(
+            (x) => `<tr><td>${x[0]}</td><td>${x[1]}</td><td>${x[2]}</td></tr>`,
+          )
+          .join("");
     }
 
     const fileInput = $("file");
@@ -262,7 +339,8 @@ export default function Home() {
         let f = e.target.files[0];
         if (f) {
           const info = $("fileinfo");
-          if (info) info.textContent = `Loaded: ${f.name} (${Math.round(f.size / 1024)} KB)`;
+          if (info)
+            info.textContent = `Loaded: ${f.name} (${Math.round(f.size / 1024)} KB)`;
           drawEEG(20);
         }
       };
@@ -297,23 +375,33 @@ export default function Home() {
       let a = total ? Math.round((correct / total) * 100) : 0;
       $("gacc").textContent = a + "%";
       $("gerr").textContent = errors;
-      $("grt").textContent = rts.length ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length) + " ms" : "—";
+      $("grt").textContent = rts.length
+        ? Math.round(rts.reduce((a, b) => a + b, 0) / rts.length) + " ms"
+        : "—";
       if (rts.length > 1) {
         let m = rts.reduce((a, b) => a + b, 0) / rts.length,
-          sd = Math.sqrt(rts.reduce((a, b) => a + (b - m) ** 2, 0) / rts.length);
+          sd = Math.sqrt(
+            rts.reduce((a, b) => a + (b - m) ** 2, 0) / rts.length,
+          );
         $("gvar").textContent = Math.round(sd) + " ms";
       } else $("gvar").textContent = "—";
     }
     function emitTaskMarker(label) {
-      window.dispatchEvent(new CustomEvent("research-task-marker", { detail: { label } }));
+      window.dispatchEvent(
+        new CustomEvent("research-task-marker", { detail: { label } }),
+      );
     }
     function startGame(n) {
       if (window.__studyPhase && window.__studyPhase !== "task") {
-        alertUser("เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase");
+        alertUser(
+          "เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase",
+        );
         return;
       }
       if (window.__studyPhase === "task" && window.__studyGameId !== n) {
-        alertUser("รอบทดลองนี้กำหนดเกมอื่นไว้ กรุณาใช้เกมที่เลือกก่อนเริ่มบันทึก");
+        alertUser(
+          "รอบทดลองนี้กำหนดเกมอื่นไว้ กรุณาใช้เกมที่เลือกก่อนเริ่มบันทึก",
+        );
         return;
       }
       if (window.__studyPhase === "task" && currentFreeGame) return;
@@ -353,7 +441,9 @@ export default function Home() {
       else errors++;
       const rt = Math.round(performance.now() - timerStart);
       rts.push(rt);
-      emitTaskMarker(`game_1_trial_${currentTrial}_response_${chosen}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
+      emitTaskMarker(
+        `game_1_trial_${currentTrial}_response_${chosen}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`,
+      );
       setMetrics();
       const runId = gameRunId;
       setTimeout(() => game1(runId), 250);
@@ -379,7 +469,10 @@ export default function Home() {
     function answer2() {
       if (currentFreeGame !== 2 || !acceptingResponse) return;
       acceptingResponse = false;
-      let v = $("seqin").value.replace(/\s/g, "").slice(0, 16).replace(/[^0-9]/g, ""),
+      let v = $("seqin")
+          .value.replace(/\s/g, "")
+          .slice(0, 16)
+          .replace(/[^0-9]/g, ""),
         truth = seq.join("");
       total++;
       const ok = v === truth;
@@ -387,7 +480,9 @@ export default function Home() {
       else errors++;
       const rt = Math.round(performance.now() - timerStart);
       rts.push(rt);
-      emitTaskMarker(`game_2_trial_${currentTrial}_response_${v || "empty"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
+      emitTaskMarker(
+        `game_2_trial_${currentTrial}_response_${v || "empty"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`,
+      );
       setMetrics();
       const runId = gameRunId;
       setTimeout(() => game2(runId), 400);
@@ -405,7 +500,9 @@ export default function Home() {
       box.innerHTML = `<div style="text-align:center"><p>Did the pattern change? / รูปแบบเปลี่ยนหรือไม่?</p><div style="font-size:40px">${a.join(" ")}</div><div style="font-size:40px;margin:15px">${b.join(" ")}</div><button onclick="answer3(${change},true)">Changed</button> <button class="secondary" onclick="answer3(${change},false)">Same</button></div>`;
       timerStart = performance.now();
       acceptingResponse = true;
-      emitTaskMarker(`game_3_trial_${currentTrial}_stimulus_${change ? "changed" : "same"}`);
+      emitTaskMarker(
+        `game_3_trial_${currentTrial}_stimulus_${change ? "changed" : "same"}`,
+      );
     }
     function answer3(truth, choice) {
       if (currentFreeGame !== 3 || !acceptingResponse) return;
@@ -416,15 +513,21 @@ export default function Home() {
       else errors++;
       const rt = Math.round(performance.now() - timerStart);
       rts.push(rt);
-      emitTaskMarker(`game_3_trial_${currentTrial}_response_${choice ? "changed" : "same"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`);
+      emitTaskMarker(
+        `game_3_trial_${currentTrial}_response_${choice ? "changed" : "same"}_${ok ? "correct" : "incorrect"}_rt_${rt}ms`,
+      );
       setMetrics();
       const runId = gameRunId;
       setTimeout(() => game3(runId), 300);
     }
     const onResearchTaskEnded = (event) => {
       if (currentFreeGame && window.__studyPhase === "task") {
-        const meanRt = rts.length ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length) : 0;
-        emitTaskMarker(`game_${currentFreeGame}_end_trials_${total}_correct_${correct}_errors_${errors}_mean_rt_${meanRt}ms`);
+        const meanRt = rts.length
+          ? Math.round(rts.reduce((sum, value) => sum + value, 0) / rts.length)
+          : 0;
+        emitTaskMarker(
+          `game_${currentFreeGame}_end_trials_${total}_correct_${correct}_errors_${errors}_mean_rt_${meanRt}ms`,
+        );
       }
       currentFreeGame = 0;
       acceptingResponse = false;
@@ -432,7 +535,10 @@ export default function Home() {
       const finishTaskBtn = $("finishTaskBtn");
       if (finishTaskBtn) finishTaskBtn.hidden = true;
       const box = $("gamebox");
-      if (box) box.textContent = event.detail?.restSeconds ? `กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก ${event.detail.restSeconds} วินาที / Recording ${event.detail.restSeconds} more seconds` : "กิจกรรมสิ้นสุด / Task ended";
+      if (box)
+        box.textContent = event.detail?.restSeconds
+          ? `กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก ${event.detail.restSeconds} วินาที / Recording ${event.detail.restSeconds} more seconds`
+          : "กิจกรรมสิ้นสุด / Task ended";
     };
     const onResearchTaskStart = (event) => {
       const selectedGame = Number(event.detail?.gameId);
@@ -445,13 +551,17 @@ export default function Home() {
         finishTaskBtn.hidden = false;
       }
     };
-    const onFinishTaskClick = () => window.dispatchEvent(new Event("research-task-complete"));
+    const onFinishTaskClick = () =>
+      window.dispatchEvent(new Event("research-task-complete"));
     const finishTaskBtn = $("finishTaskBtn");
     finishTaskBtn?.addEventListener("click", onFinishTaskClick);
     window.addEventListener("research-task-ended", onResearchTaskEnded);
     window.addEventListener("research-task-start", onResearchTaskStart);
     const onResearchSessionFinished = () => showSection("journey");
-    window.addEventListener("research-session-finished", onResearchSessionFinished);
+    window.addEventListener(
+      "research-session-finished",
+      onResearchSessionFinished,
+    );
 
     /* ---------- Auth / journey ---------- */
     let journey = { step: 1, profile: {}, screen: null, games: [] };
@@ -462,9 +572,14 @@ export default function Home() {
       sessionStorage.setItem("cogni_login", e);
       sessionStorage.setItem("cogni_name", String(displayName || ""));
       if (recordLoginEvent) {
-        let logs = JSON.parse(localStorage.getItem("cogni_logins_" + e) || "[]");
+        let logs = JSON.parse(
+          localStorage.getItem("cogni_logins_" + e) || "[]",
+        );
         logs.push(new Date().toISOString());
-        localStorage.setItem("cogni_logins_" + e, JSON.stringify(logs.slice(-100)));
+        localStorage.setItem(
+          "cogni_logins_" + e,
+          JSON.stringify(logs.slice(-100)),
+        );
       }
       journey = { step: 1, profile: {}, screen: null, games: [] };
       let saved = localStorage.getItem("cogni_progress_" + e);
@@ -495,7 +610,16 @@ export default function Home() {
       setAuthed(false);
     }
     async function logoutUser() {
-      if (window.__studyUnexported && !window.confirm(localizeText("มีข้อมูลการทดลองที่ยังไม่ได้ส่งออก ต้องการออกจากระบบหรือไม่?", localeRef.current))) return;
+      if (
+        window.__studyUnexported &&
+        !window.confirm(
+          localizeText(
+            "มีข้อมูลการทดลองที่ยังไม่ได้ส่งออก ต้องการออกจากระบบหรือไม่?",
+            localeRef.current,
+          ),
+        )
+      )
+        return;
       if (museConnected) await disconnectMuse();
       try {
         await fetch("/api/auth/logout", { method: "POST" });
@@ -519,7 +643,8 @@ export default function Home() {
     restoreSession();
     function saveJourney() {
       let e = sessionStorage.getItem("cogni_login");
-      if (e) localStorage.setItem("cogni_progress_" + e, JSON.stringify(journey));
+      if (e)
+        localStorage.setItem("cogni_progress_" + e, JSON.stringify(journey));
       if ($("dMember")) renderDashboard();
     }
     function nextStep() {
@@ -530,7 +655,13 @@ export default function Home() {
     function showStep() {
       for (let i = 1; i <= 5; i++) {
         let e = $("s" + i);
-        if (e) e.textContent = i < journey.step ? "Completed" : i === journey.step ? "Ready" : "Locked";
+        if (e)
+          e.textContent =
+            i < journey.step
+              ? "Completed"
+              : i === journey.step
+                ? "Ready"
+                : "Locked";
       }
       let b = $("stepbox");
       if (!b) return;
@@ -555,7 +686,9 @@ export default function Home() {
         return;
       }
       if (!Number.isFinite(age) || age < 10 || age > 120) {
-        alertUser("อายุต้องเป็นตัวเลขระหว่าง 10–120 / Age must be a number between 10–120");
+        alertUser(
+          "อายุต้องเป็นตัวเลขระหว่าง 10–120 / Age must be a number between 10–120",
+        );
         return;
       }
       journey.profile = {
@@ -584,7 +717,9 @@ export default function Home() {
     }
     function mmseEdu() {
       let none = $("edu").value === "none";
-      document.querySelectorAll(".lit").forEach((r) => (r.style.opacity = none ? 0.35 : 1));
+      document
+        .querySelectorAll(".lit")
+        .forEach((r) => (r.style.opacity = none ? 0.35 : 1));
       document.querySelectorAll(".lit input").forEach((i) => {
         i.disabled = none;
         if (none) i.value = 0;
@@ -607,7 +742,8 @@ export default function Home() {
       let max = edu === "none" ? 23 : 30,
         cut = edu === "none" ? 14 : edu === "primary" ? 17 : 22;
       let flag = total <= cut;
-      $("mmseres").innerHTML = `MMSE-Thai 2002: <b>${total}/${max}</b> · Cut-off / จุดตัด ≤ ${cut} · ${flag ? "Screen-positive / ผลคัดกรองเข้าเกณฑ์ ควรประเมินเพิ่มเติม" : "Above screening cut-off / สูงกว่าจุดตัด"}`;
+      $("mmseres").innerHTML =
+        `MMSE-Thai 2002: <b>${total}/${max}</b> · Cut-off / จุดตัด ≤ ${cut} · ${flag ? "Screen-positive / ผลคัดกรองเข้าเกณฑ์ ควรประเมินเพิ่มเติม" : "Above screening cut-off / สูงกว่าจุดตัด"}`;
       return { total, max, cut, education: edu, screenPositive: flag };
     }
     function saveMMSE() {
@@ -616,16 +752,39 @@ export default function Home() {
       journey.screen = r;
       nextStep();
     }
-    let jg = { game: 0, trial: 0, total: 6, correct: 0, errors: 0, rts: [], started: 0, truth: null, seq: [] };
+    let jg = {
+      game: 0,
+      trial: 0,
+      total: 6,
+      correct: 0,
+      errors: 0,
+      rts: [],
+      started: 0,
+      truth: null,
+      seq: [],
+    };
     function initJourneyGame(g) {
-      jg = { game: g, trial: 0, total: 6, correct: 0, errors: 0, rts: [], started: 0, truth: null, seq: [] };
+      jg = {
+        game: g,
+        trial: 0,
+        total: 6,
+        correct: 0,
+        errors: 0,
+        rts: [],
+        started: 0,
+        truth: null,
+        seq: [],
+      };
       renderJGame();
     }
     function jMetrics() {
       let a = jg.trial ? Math.round((jg.correct / jg.trial) * 100) : 0,
-        rt = jg.rts.length ? Math.round(jg.rts.reduce((a, b) => a + b, 0) / jg.rts.length) : 0;
+        rt = jg.rts.length
+          ? Math.round(jg.rts.reduce((a, b) => a + b, 0) / jg.rts.length)
+          : 0;
       let e = $("jgmetrics");
-      if (e) e.textContent = `Trials: ${jg.trial}/${jg.total} · Accuracy: ${jg.trial ? a + "%" : "—"} · Mean RT: ${rt ? rt + " ms" : "—"} · Errors: ${jg.errors}`;
+      if (e)
+        e.textContent = `Trials: ${jg.trial}/${jg.total} · Accuracy: ${jg.trial ? a + "%" : "—"} · Mean RT: ${rt ? rt + " ms" : "—"} · Errors: ${jg.errors}`;
     }
     function renderJGame() {
       let a = $("jgarea");
@@ -637,23 +796,40 @@ export default function Home() {
       if (jg.game === 1) {
         let rule = jg.trial % 2 === 0 ? "PARITY" : "MAGNITUDE",
           num = 1 + Math.floor(Math.random() * 9);
-        jg.truth = rule === "PARITY" ? (num % 2 === 0 ? "EVEN" : "ODD") : num >= 5 ? "HIGH" : "LOW";
+        jg.truth =
+          rule === "PARITY"
+            ? num % 2 === 0
+              ? "EVEN"
+              : "ODD"
+            : num >= 5
+              ? "HIGH"
+              : "LOW";
         a.innerHTML = `<div style="text-align:center"><span class="pill">Trial ${jg.trial + 1}/6</span><h3>${rule === "PARITY" ? "Rule: Odd or Even? / คี่หรือคู่?" : "Rule: Low (1–4) or High (5–9)? / ต่ำหรือสูง?"}</h3><div style="font-size:76px;margin:18px">${num}</div><div class="controls" style="justify-content:center">${rule === "PARITY" ? '<button data-a="ODD">ODD / คี่</button><button class="secondary" data-a="EVEN">EVEN / คู่</button>' : '<button data-a="LOW">LOW / ต่ำ</button><button class="secondary" data-a="HIGH">HIGH / สูง</button>'}</div></div>`;
-        a.querySelectorAll("button").forEach((x) => x.addEventListener("click", () => scoreJ(x.dataset.a)));
+        a.querySelectorAll("button").forEach((x) =>
+          x.addEventListener("click", () => scoreJ(x.dataset.a)),
+        );
         jg.started = performance.now();
       } else if (jg.game === 2) {
-        jg.seq = Array.from({ length: 4 + Math.floor(jg.trial / 2) }, () => 1 + Math.floor(Math.random() * 6));
+        jg.seq = Array.from(
+          { length: 4 + Math.floor(jg.trial / 2) },
+          () => 1 + Math.floor(Math.random() * 6),
+        );
         a.innerHTML = `<div style="text-align:center"><span class="pill">Trial ${jg.trial + 1}/6</span><h3>Remember this sequence / จำลำดับนี้</h3><div style="font-size:44px;letter-spacing:14px;margin:28px">${jg.seq.join(" ")}</div></div>`;
         setTimeout(() => {
           if (!document.getElementById("jgarea")) return;
           a.innerHTML = `<div style="text-align:center"><h3>Enter the sequence / ใส่ลำดับ</h3><input id="jseq" inputmode="numeric" placeholder="เช่น 1 3 5 2" style="max-width:320px"><div class="controls" style="justify-content:center"><button id="jseqgo">Submit / ตอบ</button></div></div>`;
           jg.started = performance.now();
-          $("jseqgo").addEventListener("click", () => scoreJ($("jseq").value.replace(/\D/g, "")));
+          $("jseqgo").addEventListener("click", () =>
+            scoreJ($("jseq").value.replace(/\D/g, "")),
+          );
         }, 1800);
         jg.truth = jg.seq.join("");
       } else {
         let symbols = ["●", "▲", "■", "◆", "★", "⬟"],
-          first = Array.from({ length: 5 }, () => symbols[Math.floor(Math.random() * symbols.length)]),
+          first = Array.from(
+            { length: 5 },
+            () => symbols[Math.floor(Math.random() * symbols.length)],
+          ),
           second = [...first],
           changed = Math.random() > 0.5;
         if (changed) {
@@ -666,7 +842,9 @@ export default function Home() {
         }
         jg.truth = changed ? "CHANGED" : "SAME";
         a.innerHTML = `<div style="text-align:center"><span class="pill">Trial ${jg.trial + 1}/6</span><h3>Did the pattern change? / รูปแบบเปลี่ยนหรือไม่?</h3><div style="font-size:38px;letter-spacing:10px;margin:16px">${first.join("")}</div><div style="font-size:38px;letter-spacing:10px;margin:16px">${second.join("")}</div><div class="controls" style="justify-content:center"><button data-a="CHANGED">Changed / เปลี่ยน</button><button class="secondary" data-a="SAME">Same / เหมือนเดิม</button></div></div>`;
-        a.querySelectorAll("button").forEach((x) => x.addEventListener("click", () => scoreJ(x.dataset.a)));
+        a.querySelectorAll("button").forEach((x) =>
+          x.addEventListener("click", () => scoreJ(x.dataset.a)),
+        );
         jg.started = performance.now();
       }
     }
@@ -683,11 +861,22 @@ export default function Home() {
       let acc = Math.round((jg.correct / jg.total) * 100),
         rt = Math.round(jg.rts.reduce((a, b) => a + b, 0) / jg.rts.length),
         mean = rt,
-        sd = Math.round(Math.sqrt(jg.rts.reduce((a, b) => a + (b - mean) ** 2, 0) / jg.rts.length));
-      let result = { game: jg.game, accuracy: acc, rt: rt, errors: jg.errors, variability: sd };
+        sd = Math.round(
+          Math.sqrt(
+            jg.rts.reduce((a, b) => a + (b - mean) ** 2, 0) / jg.rts.length,
+          ),
+        );
+      let result = {
+        game: jg.game,
+        accuracy: acc,
+        rt: rt,
+        errors: jg.errors,
+        variability: sd,
+      };
       journey.games[jg.game - 1] = result;
       saveJourney();
-      $("jgarea").innerHTML = `<div style="text-align:center"><h2>Completed / เสร็จสิ้น</h2><p>Accuracy <b>${acc}%</b> · Mean RT <b>${rt} ms</b> · Errors <b>${jg.errors}</b></p><button id="jgcontinue">Continue / ต่อไป</button></div>`;
+      $("jgarea").innerHTML =
+        `<div style="text-align:center"><h2>Completed / เสร็จสิ้น</h2><p>Accuracy <b>${acc}%</b> · Mean RT <b>${rt} ms</b> · Errors <b>${jg.errors}</b></p><button id="jgcontinue">Continue / ต่อไป</button></div>`;
       jMetrics();
       $("jgcontinue").addEventListener("click", nextStep);
     }
@@ -695,34 +884,58 @@ export default function Home() {
       $("s5").textContent = "Completed";
       let em = sessionStorage.getItem("cogni_login");
       if (em && !journey.completedSaved) {
-        let hist = JSON.parse(localStorage.getItem("cogni_assessments_" + em) || "[]");
-        hist.push({ date: new Date().toISOString(), screen: journey.screen, games: journey.games, profile: journey.profile, eeg: journey.eeg || null });
+        let hist = JSON.parse(
+          localStorage.getItem("cogni_assessments_" + em) || "[]",
+        );
+        hist.push({
+          date: new Date().toISOString(),
+          screen: journey.screen,
+          games: journey.games,
+          profile: journey.profile,
+          eeg: journey.eeg || null,
+        });
         localStorage.setItem("cogni_assessments_" + em, JSON.stringify(hist));
         journey.completedSaved = true;
         saveJourney();
       }
-      let avg = journey.games.length ? Math.round(journey.games.reduce((a, x) => a + x.accuracy, 0) / journey.games.length) : 0;
+      let avg = journey.games.length
+        ? Math.round(
+            journey.games.reduce((a, x) => a + x.accuracy, 0) /
+              journey.games.length,
+          )
+        : 0;
       let baselineCard;
       if (journey.eeg) {
         baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><table><tr><th>Channel</th><th>Mean</th><th>SD</th><th>Range</th></tr>${journey.eeg.channels
           .map(
             (c) =>
-              `<tr><td>${c.name}</td><td>${c.samples ? c.mean + " µV" : "—"}</td><td>${c.samples ? c.sd + " µV" : "—"}</td><td>${c.samples ? c.min + "–" + c.max + " µV" : "—"}</td></tr>`
+              `<tr><td>${c.name}</td><td>${c.samples ? c.mean + " µV" : "—"}</td><td>${c.samples ? c.sd + " µV" : "—"}</td><td>${c.samples ? c.min + "–" + c.max + " µV" : "—"}</td></tr>`,
           )
-          .join("")}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
+          .join(
+            "",
+          )}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
       } else {
         baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><p class="muted">ยังไม่ได้บันทึก Baseline — เชื่อมต่อ Muse 2 แล้วกด Start 30-sec Baseline ที่ส่วนบน / Baseline not recorded — connect Muse 2 and start the 30-second baseline above.</p></div>`;
       }
-      $("stepbox").innerHTML = `<h2>Assessment Summary / สรุปผลการประเมิน</h2><div class="grid"><div class="card metric"><small>Screening score</small><b>${journey.screen ? journey.screen.total + "/" + journey.screen.max : "—"}</b></div><div class="card metric"><small>Mean game accuracy</small><b>${avg}%</b></div><div class="card metric"><small>Completed games</small><b>${journey.games.length}/3</b></div><div class="card metric"><small>Status</small><b>Complete</b></div></div>${baselineCard}<div class="card" style="margin-top:14px"><h3>Game results</h3><table><tr><th>Game</th><th>Accuracy</th><th>Reaction time</th><th>Errors</th><th>RT variability</th></tr>${journey.games
-        .map(
-          (x) =>
-            `<tr><td>${["Context Switch Trail", "Echo Sequence", "Pattern Drift"][x.game - 1]}</td><td>${x.accuracy}%</td><td>${x.rt} ms</td><td>${x.errors}</td><td>${x.variability ?? "—"} ms</td></tr>`
-        )
-        .join("")}</table><p class="notice">Research screening summary only. These results do not diagnose Alzheimer’s disease or another medical condition.</p></div><div class="controls"><button class="secondary" onclick="restartJourney()">Start new assessment / เริ่มการประเมินใหม่</button></div>`;
+      $("stepbox").innerHTML =
+        `<h2>Assessment Summary / สรุปผลการประเมิน</h2><div class="grid"><div class="card metric"><small>Screening score</small><b>${journey.screen ? journey.screen.total + "/" + journey.screen.max : "—"}</b></div><div class="card metric"><small>Mean game accuracy</small><b>${avg}%</b></div><div class="card metric"><small>Completed games</small><b>${journey.games.length}/3</b></div><div class="card metric"><small>Status</small><b>Complete</b></div></div>${baselineCard}<div class="card" style="margin-top:14px"><h3>Game results</h3><table><tr><th>Game</th><th>Accuracy</th><th>Reaction time</th><th>Errors</th><th>RT variability</th></tr>${journey.games
+          .map(
+            (x) =>
+              `<tr><td>${["Context Switch Trail", "Echo Sequence", "Pattern Drift"][x.game - 1]}</td><td>${x.accuracy}%</td><td>${x.rt} ms</td><td>${x.errors}</td><td>${x.variability ?? "—"} ms</td></tr>`,
+          )
+          .join(
+            "",
+          )}</table><p class="notice">Research screening summary only. These results do not diagnose Alzheimer’s disease or another medical condition.</p></div><div class="controls"><button class="secondary" onclick="restartJourney()">Start new assessment / เริ่มการประเมินใหม่</button></div>`;
       renderHistory();
     }
     function restartJourney() {
-      journey = { step: 1, profile: {}, screen: null, games: [], completedSaved: false };
+      journey = {
+        step: 1,
+        profile: {},
+        screen: null,
+        games: [],
+        completedSaved: false,
+      };
       saveJourney();
       showStep();
       renderDashboard();
@@ -730,7 +943,12 @@ export default function Home() {
     function riskLevel() {
       if (!journey.screen || typeof journey.screen !== "object") return null;
       let d = journey.screen.total - journey.screen.cut;
-      if (d <= 0) return { level: "red", label: "Red / แดง", text: "Screen-positive on MMSE-Thai 2002; professional cognitive assessment is appropriate." };
+      if (d <= 0)
+        return {
+          level: "red",
+          label: "Red / แดง",
+          text: "Screen-positive on MMSE-Thai 2002; professional cognitive assessment is appropriate.",
+        };
       if (d <= 3)
         return {
           level: "yellow",
@@ -747,36 +965,60 @@ export default function Home() {
       let em = sessionStorage.getItem("cogni_login");
       if (!em) return;
       let logs = JSON.parse(localStorage.getItem("cogni_logins_" + em) || "[]"),
-        hist = JSON.parse(localStorage.getItem("cogni_assessments_" + em) || "[]");
+        hist = JSON.parse(
+          localStorage.getItem("cogni_assessments_" + em) || "[]",
+        );
       $("dMember").textContent = sessionStorage.getItem("cogni_name") || em;
       $("dLogins").textContent = logs.length;
       $("dAssess").textContent = hist.length;
-      $("dMMSE").textContent = journey.screen && journey.screen.total != null ? journey.screen.total + "/" + journey.screen.max : "—";
+      $("dMMSE").textContent =
+        journey.screen && journey.screen.total != null
+          ? journey.screen.total + "/" + journey.screen.max
+          : "—";
       let r = riskLevel(),
         rb = $("dashRisk"),
         dn = $("riskDonut"),
         dt = $("riskDonutText");
       rb.className = "risk-banner " + (r ? "risk-" + r.level : "");
-      rb.textContent = r ? localizeText(r.label, localeRef.current) + " — " + localizeText(r.text, localeRef.current) : localizeText("Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง", localeRef.current);
-      dt.textContent = r ? localizeText(r.label, localeRef.current) : localizeText("No data", localeRef.current);
-      $("riskExplain").textContent = r ? localizeText(r.text, localeRef.current) : "";
+      rb.textContent = r
+        ? localizeText(r.label, localeRef.current) +
+          " — " +
+          localizeText(r.text, localeRef.current)
+        : localizeText(
+            "Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง",
+            localeRef.current,
+          );
+      dt.textContent = r
+        ? localizeText(r.label, localeRef.current)
+        : localizeText("No data", localeRef.current);
+      $("riskExplain").textContent = r
+        ? localizeText(r.text, localeRef.current)
+        : "";
       if (r) {
         dn.style.background =
-          r.level === "green" ? "conic-gradient(#4bd28b 0 100%,#243449 0)" : r.level === "yellow" ? "conic-gradient(#f1c84c 0 100%,#243449 0)" : "conic-gradient(#ef6672 0 100%,#243449 0)";
+          r.level === "green"
+            ? "conic-gradient(#4bd28b 0 100%,#243449 0)"
+            : r.level === "yellow"
+              ? "conic-gradient(#f1c84c 0 100%,#243449 0)"
+              : "conic-gradient(#ef6672 0 100%,#243449 0)";
       }
       let gc = $("gameChart");
       gc.innerHTML =
         (journey.games || [])
           .map(
             (x, i) =>
-              `<div class="barcol"><div class="bar" style="height:${Math.max(3, x.accuracy)}%"></div><div class="barlabel">Game ${i + 1}<br>${x.accuracy}%</div></div>`
+              `<div class="barcol"><div class="bar" style="height:${Math.max(3, x.accuracy)}%"></div><div class="barlabel">Game ${i + 1}<br>${x.accuracy}%</div></div>`,
           )
-          .join("") || '<span class="muted">No game data / ยังไม่มีข้อมูลเกม</span>';
+          .join("") ||
+        '<span class="muted">No game data / ยังไม่มีข้อมูลเกม</span>';
       $("loginHistory").innerHTML =
         logs
           .slice(-5)
           .reverse()
-          .map((x) => `<div>${new Date(x).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")}</div>`)
+          .map(
+            (x) =>
+              `<div>${new Date(x).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")}</div>`,
+          )
           .join("") || "—";
     }
     function csvEscape(v) {
@@ -785,7 +1027,9 @@ export default function Home() {
     }
     function exportCSV() {
       let em = sessionStorage.getItem("cogni_login"),
-        hist = JSON.parse(localStorage.getItem("cogni_assessments_" + em) || "[]"),
+        hist = JSON.parse(
+          localStorage.getItem("cogni_assessments_" + em) || "[]",
+        ),
         logs = JSON.parse(localStorage.getItem("cogni_logins_" + em) || "[]");
       let rows = [
         [
@@ -817,19 +1061,59 @@ export default function Home() {
           "tp10_mean_uv",
         ],
       ];
-      let records = hist.length ? hist : [{ date: "", screen: journey.screen, games: journey.games, profile: journey.profile, eeg: journey.eeg || null }];
+      let records = hist.length
+        ? hist
+        : [
+            {
+              date: "",
+              screen: journey.screen,
+              games: journey.games,
+              profile: journey.profile,
+              eeg: journey.eeg || null,
+            },
+          ];
       records.forEach((a) => {
         let s = a.screen || {},
           g = a.games || [],
           p = a.profile || {},
           e = a.eeg,
-          d = s.total == null ? "" : s.total <= s.cut ? "red" : s.total - s.cut <= 3 ? "yellow" : "green";
+          d =
+            s.total == null
+              ? ""
+              : s.total <= s.cut
+                ? "red"
+                : s.total - s.cut <= 3
+                  ? "yellow"
+                  : "green";
         let eegCols = e
-          ? [e.recordedAt, e.packets, ...[0, 1, 2, 3].map((i) => (e.channels[i]?.samples ? e.channels[i].mean : ""))]
+          ? [
+              e.recordedAt,
+              e.packets,
+              ...[0, 1, 2, 3].map((i) =>
+                e.channels[i]?.samples ? e.channels[i].mean : "",
+              ),
+            ]
           : ["", "", "", "", "", ""];
-        rows.push([em, logs.length, a.date, p.id, p.age, s.education, s.total, s.max, s.cut, s.screenPositive, d, ...[0, 1, 2].flatMap((i) => [g[i]?.accuracy, g[i]?.rt, g[i]?.errors]), ...eegCols]);
+        rows.push([
+          em,
+          logs.length,
+          a.date,
+          p.id,
+          p.age,
+          s.education,
+          s.total,
+          s.max,
+          s.cut,
+          s.screenPositive,
+          d,
+          ...[0, 1, 2].flatMap((i) => [g[i]?.accuracy, g[i]?.rt, g[i]?.errors]),
+          ...eegCols,
+        ]);
       });
-      let blob = new Blob(["\ufeff" + rows.map((r) => r.map(csvEscape).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }),
+      let blob = new Blob(
+          ["\ufeff" + rows.map((r) => r.map(csvEscape).join(",")).join("\n")],
+          { type: "text/csv;charset=utf-8" },
+        ),
         u = URL.createObjectURL(blob),
         a = document.createElement("a");
       a.href = u;
@@ -841,9 +1125,12 @@ export default function Home() {
       let em = sessionStorage.getItem("cogni_login"),
         box = $("historyTable");
       if (!box || !em) return;
-      let hist = JSON.parse(localStorage.getItem("cogni_assessments_" + em) || "[]");
+      let hist = JSON.parse(
+        localStorage.getItem("cogni_assessments_" + em) || "[]",
+      );
       if (!hist.length) {
-        box.innerHTML = '<p class="muted">ยังไม่มีประวัติการประเมิน / No assessment history</p>';
+        box.innerHTML =
+          '<p class="muted">ยังไม่มีประวัติการประเมิน / No assessment history</p>';
         return;
       }
       box.innerHTML = `<div style="overflow:auto"><table><tr><th>Date / วันที่</th><th>Participant</th><th>MMSE</th><th>Level / ระดับ</th><th>Game 1</th><th>Game 2</th><th>Game 3</th></tr>${hist
@@ -852,7 +1139,14 @@ export default function Home() {
         .map((a) => {
           let s = a.screen || {},
             g = a.games || [],
-            lvl = s.total == null ? "—" : s.total <= s.cut ? "🔴 Red / แดง" : s.total - s.cut <= 3 ? "🟡 Yellow / เหลือง" : "🟢 Green / เขียว";
+            lvl =
+              s.total == null
+                ? "—"
+                : s.total <= s.cut
+                  ? "🔴 Red / แดง"
+                  : s.total - s.cut <= 3
+                    ? "🟡 Yellow / เหลือง"
+                    : "🟢 Green / เขียว";
           return `<tr><td>${a.date ? new Date(a.date).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US") : "—"}</td><td>${a.profile?.id || "—"}</td><td>${s.total != null ? s.total + "/" + s.max : "—"}</td><td>${lvl}</td><td>${g[0]?.accuracy ?? "—"}%</td><td>${g[1]?.accuracy ?? "—"}%</td><td>${g[2]?.accuracy ?? "—"}%</td></tr>`;
         })
         .join("")}</table></div>`;
@@ -886,26 +1180,33 @@ export default function Home() {
     function setMuseConnected(on, deviceName = null) {
       const s = $("museStatus");
       s.textContent = on
-        ? "● Connected" + (deviceName ? ": " + deviceName : "") + " / เชื่อมต่อแล้ว"
+        ? "● Connected" +
+          (deviceName ? ": " + deviceName : "") +
+          " / เชื่อมต่อแล้ว"
         : "● Not connected / ยังไม่เชื่อมต่อ";
       s.style.background = on ? "#123c2b" : "#0a3140";
       if (!on) {
         latest = [null, null, null, null];
         traces = [[], [], [], []];
-        plotBuffers.forEach((buffer) => { buffer.length = 0; });
+        plotBuffers.forEach((buffer) => {
+          buffer.length = 0;
+        });
         for (let channel = 0; channel < 4; channel++) {
           $("ch" + channel).textContent = "—";
           $("muse50_" + channel).textContent = "50 Hz: —";
         }
         $("museNoiseWarning").style.display = "none";
         window.__museReady = false;
-        window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: false } }));
+        window.dispatchEvent(
+          new CustomEvent("muse-study-status", { detail: { ready: false } }),
+        );
       }
     }
     function renderMuse() {
       for (let ch = 0; ch < 4; ch++) {
         const el = $("ch" + ch);
-        if (el && latest[ch] != null && Number.isFinite(latest[ch])) el.textContent = latest[ch].toFixed(2);
+        if (el && latest[ch] != null && Number.isFinite(latest[ch]))
+          el.textContent = latest[ch].toFixed(2);
       }
     }
     function updateMuseQuality() {
@@ -915,13 +1216,19 @@ export default function Home() {
       traces.forEach((samples, channel) => {
         const quality = summarizeEegWindow(samples);
         const label = $("muse50_" + channel);
-        if (label) label.textContent = quality ? `50 Hz ≈ ${quality.line50AmplitudeUv.toFixed(1)} µV` : "50 Hz: รอข้อมูล 2 วินาที";
-        if (quality?.line50Dominant) noisy.push(["TP9", "AF7", "AF8", "TP10"][channel]);
+        if (label)
+          label.textContent = quality
+            ? `50 Hz ≈ ${quality.line50AmplitudeUv.toFixed(1)} µV`
+            : "50 Hz: รอข้อมูล 2 วินาที";
+        if (quality?.line50Dominant)
+          noisy.push(["TP9", "AF7", "AF8", "TP10"][channel]);
       });
       const warning = $("museNoiseWarning");
       if (warning) {
         warning.style.display = noisy.length ? "block" : "none";
-        warning.textContent = noisy.length ? `คลื่นใกล้ 50 Hz เด่นที่ ${noisy.join(", ")} อาจเป็นสัญญาณรบกวนไฟฟ้า ตรวจเซนเซอร์และสภาพแวดล้อมแล้วทดสอบใหม่ก่อนเก็บข้อมูลวิจัย` : "";
+        warning.textContent = noisy.length
+          ? `คลื่นใกล้ 50 Hz เด่นที่ ${noisy.join(", ")} อาจเป็นสัญญาณรบกวนไฟฟ้า ตรวจเซนเซอร์และสภาพแวดล้อมแล้วทดสอบใหม่ก่อนเก็บข้อมูลวิจัย`
+          : "";
       }
     }
     function drawMuse() {
@@ -945,7 +1252,8 @@ export default function Home() {
       plotBuffers.forEach((buf, ch) => {
         if (buf.length < 2) return;
         const mean = buf.reduce((a, b) => a + b, 0) / buf.length;
-        const variance = buf.reduce((sum, value) => sum + (value - mean) ** 2, 0) / buf.length;
+        const variance =
+          buf.reduce((sum, value) => sum + (value - mean) ** 2, 0) / buf.length;
         const scale = Math.max(20, 3 * Math.sqrt(variance));
         const rowHeight = h / 4;
         const halfHeight = rowHeight / 2 - 5;
@@ -954,7 +1262,9 @@ export default function Home() {
         x.beginPath();
         buf.forEach((v, i) => {
           const px = (i / (maxPlot - 1)) * w;
-          const py = (ch + 0.5) * rowHeight - Math.max(-1, Math.min(1, (v - mean) / scale)) * halfHeight;
+          const py =
+            (ch + 0.5) * rowHeight -
+            Math.max(-1, Math.min(1, (v - mean) / scale)) * halfHeight;
           i ? x.lineTo(px, py) : x.moveTo(px, py);
         });
         x.stroke();
@@ -969,17 +1279,30 @@ export default function Home() {
     });
 
     const secureOK = window.isSecureContext;
-    const chromeOK = /Chrome\//.test(navigator.userAgent) && !/Edg\//.test(navigator.userAgent);
-    const linuxDesktop = /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+    const chromeOK =
+      /Chrome\//.test(navigator.userAgent) &&
+      !/Edg\//.test(navigator.userAgent);
+    const linuxDesktop =
+      /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
     const webBluetoothUnavailableMessage = linuxDesktop
       ? "Chrome บน Linux ยังไม่ได้เปิด Web Bluetooth — เปิด chrome://flags/#enable-web-bluetooth และ chrome://flags/#enable-web-bluetooth-new-permissions-backend เป็น Enabled จากนั้นกด Relaunch แล้วรีเฟรชหน้านี้"
       : "Web Bluetooth ไม่พร้อมใช้งาน — ใช้ Google Chrome หรือ Microsoft Edge บนคอมพิวเตอร์/Android และเปิดเว็บผ่าน HTTPS หรือ localhost (Chrome บน iPhone และ browser ในแอป LINE/Facebook ไม่รองรับ)";
     if ($("chromeStatus")) {
-      $("chromeStatus").textContent = secureOK ? (chromeOK ? "✓ Chrome + localhost พร้อมใช้งาน" : "✓ localhost พร้อมใช้งาน") : "⚠ เปิดผิดวิธี";
+      $("chromeStatus").textContent = secureOK
+        ? chromeOK
+          ? "✓ Chrome + localhost พร้อมใช้งาน"
+          : "✓ localhost พร้อมใช้งาน"
+        : "⚠ เปิดผิดวิธี";
       $("chromeStatus").style.background = secureOK ? "#123c2b" : "#4a1d22";
     }
-    if (secureOK && typeof navigator.bluetooth === "undefined" && $("chromeStatus")) {
-      $("chromeStatus").textContent = linuxDesktop ? "⚠ ต้องเปิด Web Bluetooth ใน Chrome Linux" : "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
+    if (
+      secureOK &&
+      typeof navigator.bluetooth === "undefined" &&
+      $("chromeStatus")
+    ) {
+      $("chromeStatus").textContent = linuxDesktop
+        ? "⚠ ต้องเปิด Web Bluetooth ใน Chrome Linux"
+        : "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
       $("chromeStatus").style.background = "#4a1d22";
     }
 
@@ -1014,9 +1337,15 @@ export default function Home() {
       });
     }
     async function listKnownMuseDevices() {
-      if (!navigator.bluetooth || typeof navigator.bluetooth.getDevices !== "function") return [];
+      if (
+        !navigator.bluetooth ||
+        typeof navigator.bluetooth.getDevices !== "function"
+      )
+        return [];
       try {
-        return (await navigator.bluetooth.getDevices()).filter((d) => (d.name || "").startsWith("Muse"));
+        return (await navigator.bluetooth.getDevices()).filter((d) =>
+          (d.name || "").startsWith("Muse"),
+        );
       } catch {
         return [];
       }
@@ -1029,7 +1358,8 @@ export default function Home() {
         // was blocked or briefly offline.
         museModulePromise = import("muse-jsx")
           .then((module) => {
-            if (typeof module.MuseClient !== "function") throw new Error("MuseClient is unavailable");
+            if (typeof module.MuseClient !== "function")
+              throw new Error("MuseClient is unavailable");
             museModuleReady = module;
             return module;
           })
@@ -1053,7 +1383,10 @@ export default function Home() {
       } catch (e) {
         b.disabled = false;
         b.textContent = "Retry Muse setup / ลองเตรียมใหม่";
-        setMuseStatus("Muse driver load failed: " + e.message + " — กดปุ่มเพื่อลองใหม่", true);
+        setMuseStatus(
+          "Muse driver load failed: " + e.message + " — กดปุ่มเพื่อลองใหม่",
+          true,
+        );
       }
     }
     function subscribeEeg() {
@@ -1069,23 +1402,34 @@ export default function Home() {
           const electrode = Number(reading.electrode);
           const samples = Array.isArray(reading.samples) ? reading.samples : [];
           if (electrode >= 0 && electrode < 4 && samples.length) {
-            window.dispatchEvent(new CustomEvent("muse-study-reading", { detail: reading }));
+            window.dispatchEvent(
+              new CustomEvent("muse-study-reading", { detail: reading }),
+            );
             latest[electrode] = samples[samples.length - 1];
             samples.forEach((v) => {
               if (Number.isFinite(v)) {
                 traces[electrode].push(v);
-                if (traces[electrode].length > LINE_WINDOW_SAMPLES) traces[electrode].shift();
+                if (traces[electrode].length > LINE_WINDOW_SAMPLES)
+                  traces[electrode].shift();
                 plotBuffers[electrode].push(v);
-                if (plotBuffers[electrode].length > maxPlot) plotBuffers[electrode].shift();
-                if (baselineStart && !baselineFinalized) baselineSamples[electrode].push(v);
+                if (plotBuffers[electrode].length > maxPlot)
+                  plotBuffers[electrode].shift();
+                if (baselineStart && !baselineFinalized)
+                  baselineSamples[electrode].push(v);
               }
             });
             if (!firstPacket) {
               firstPacket = true;
               window.__museReady = true;
-              window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: true } }));
+              window.dispatchEvent(
+                new CustomEvent("muse-study-status", {
+                  detail: { ready: true },
+                }),
+              );
               setStage("eeg");
-              setMuseStatus("Connected + EEG streaming / เชื่อมต่อและเริ่มรับ EEG แล้ว");
+              setMuseStatus(
+                "Connected + EEG streaming / เชื่อมต่อและเริ่มรับ EEG แล้ว",
+              );
               getEl("baselineBtn").disabled = false;
             }
           }
@@ -1094,7 +1438,9 @@ export default function Home() {
         },
         error: (err) => {
           window.__museReady = false;
-          window.dispatchEvent(new CustomEvent("muse-study-status", { detail: { ready: false } }));
+          window.dispatchEvent(
+            new CustomEvent("muse-study-status", { detail: { ready: false } }),
+          );
           setMuseStatus("EEG stream error: " + (err?.message || err), true);
           getEl("baselineBtn").disabled = true;
         },
@@ -1107,11 +1453,15 @@ export default function Home() {
       try {
         b.disabled = true;
         b.textContent = "Connecting " + label + "…";
-        if (!quiet) setMuseStatus("Connecting to " + label + "… / กำลังเชื่อมต่อ");
+        if (!quiet)
+          setMuseStatus("Connecting to " + label + "… / กำลังเชื่อมต่อ");
         if (!museModuleReady) museModuleReady = await loadMuseDriver();
         museClient = new museModuleReady.MuseClient();
         const gatt = device.gatt;
-        if (!gatt) throw new Error("อุปกรณ์นี้ไม่มี Bluetooth GATT / Device has no Bluetooth GATT server");
+        if (!gatt)
+          throw new Error(
+            "อุปกรณ์นี้ไม่มี Bluetooth GATT / Device has no Bluetooth GATT server",
+          );
         if (!gatt.connected) await gatt.connect();
         await museClient.connect(gatt);
         try {
@@ -1124,7 +1474,9 @@ export default function Home() {
         setStage("found");
         setStage("gatt");
         setStage("service");
-        setMuseStatus(label + " connected. Starting EEG… / เชื่อมต่อแล้ว กำลังเริ่ม EEG");
+        setMuseStatus(
+          label + " connected. Starting EEG… / เชื่อมต่อแล้ว กำลังเริ่ม EEG",
+        );
 
         await museClient.start();
         setMuseStatus("EEG started. Waiting for first packet… / รอข้อมูล EEG");
@@ -1142,12 +1494,28 @@ export default function Home() {
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         const n = err?.name || "Error",
           m = err?.message || String(err);
-        if (quiet) setMuseStatus("Auto-reconnect ไม่สำเร็จ (" + (device?.name || "Muse") + " อาจปิดอยู่) — กด Connect หรือเลือกจากรายการด้านบน", true);
-        else if (n === "NotFoundError") setMuseStatus("ไม่พบอุปกรณ์ " + label + " กรุณาเปิดเครื่องแล้วลองใหม่", true);
+        if (quiet)
+          setMuseStatus(
+            "Auto-reconnect ไม่สำเร็จ (" +
+              (device?.name || "Muse") +
+              " อาจปิดอยู่) — กด Connect หรือเลือกจากรายการด้านบน",
+            true,
+          );
+        else if (n === "NotFoundError")
+          setMuseStatus(
+            "ไม่พบอุปกรณ์ " + label + " กรุณาเปิดเครื่องแล้วลองใหม่",
+            true,
+          );
         else if (n === "NetworkError")
-          setMuseStatus("เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry", true);
+          setMuseStatus(
+            "เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry",
+            true,
+          );
         else if (n === "SecurityError" || n === "NotAllowedError")
-          setMuseStatus("เบราว์เซอร์ไม่อนุญาต Bluetooth — เปิดเว็บผ่าน HTTPS/localhost และอนุญาตสิทธิ์ Bluetooth แล้วลองใหม่", true);
+          setMuseStatus(
+            "เบราว์เซอร์ไม่อนุญาต Bluetooth — เปิดเว็บผ่าน HTTPS/localhost และอนุญาตสิทธิ์ Bluetooth แล้วลองใหม่",
+            true,
+          );
         else setMuseStatus("Muse connection error: " + n + " — " + m, true);
         try {
           if (eegSub) eegSub.unsubscribe();
@@ -1182,7 +1550,10 @@ export default function Home() {
       const b = getEl("connectMuseBtn");
       b.disabled = false;
       b.textContent = "Reconnect Muse / เชื่อมต่อใหม่";
-      setMuseStatus("อุปกรณ์ตัดการเชื่อมต่อ — กด Reconnect หรือเลือกจากรายการด้านบน", true);
+      setMuseStatus(
+        "อุปกรณ์ตัดการเชื่อมต่อ — กด Reconnect หรือเลือกจากรายการด้านบน",
+        true,
+      );
     }
     async function connectMuse() {
       resetStages();
@@ -1210,8 +1581,19 @@ export default function Home() {
       } catch (err) {
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
-        if (err?.name === "NotFoundError") setMuseStatus("ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse กรุณากด Connect แล้วเลือก Muse หรือ MuseS", true);
-        else setMuseStatus("Device selection error: " + (err?.name || "Error") + " — " + (err?.message || err), true);
+        if (err?.name === "NotFoundError")
+          setMuseStatus(
+            "ยกเลิกการเลือกอุปกรณ์ หรือไม่พบ Muse กรุณากด Connect แล้วเลือก Muse หรือ MuseS",
+            true,
+          );
+        else
+          setMuseStatus(
+            "Device selection error: " +
+              (err?.name || "Error") +
+              " — " +
+              (err?.message || err),
+            true,
+          );
         return;
       }
       await connectMuseDevice(device);
@@ -1246,7 +1628,10 @@ export default function Home() {
     }
     function startBaseline() {
       if (!museConnected) {
-        setMuseStatus("Connect Muse 2 before starting the baseline / กรุณาเชื่อมต่อ Muse 2 ก่อน", true);
+        setMuseStatus(
+          "Connect Muse 2 before starting the baseline / กรุณาเชื่อมต่อ Muse 2 ก่อน",
+          true,
+        );
         return;
       }
       baselineSamples = [[], [], [], []];
@@ -1262,7 +1647,12 @@ export default function Home() {
         const p = getEl("baselineProgress");
         if (p) p.style.width = pct + "%";
         const info = getEl("baselineInfo");
-        if (info) info.textContent = "Baseline: recording " + Math.round(el / 1000) + "/30 s · Signal packets: " + packetCount;
+        if (info)
+          info.textContent =
+            "Baseline: recording " +
+            Math.round(el / 1000) +
+            "/30 s · Signal packets: " +
+            packetCount;
       }, 200);
       baselineHardStop = setTimeout(() => stopBaseline(true), 30000);
     }
@@ -1284,9 +1674,12 @@ export default function Home() {
       if (grid) {
         grid.innerHTML = baselineSamples
           .map((s, ch) => {
-            if (!s.length) return `<div class="card metric"><small>${names[ch]}</small><b>—</b><span class="muted">No samples</span></div>`;
+            if (!s.length)
+              return `<div class="card metric"><small>${names[ch]}</small><b>—</b><span class="muted">No samples</span></div>`;
             const mean = s.reduce((a, b) => a + b, 0) / s.length;
-            const sd = Math.sqrt(s.reduce((a, b) => a + (b - mean) ** 2, 0) / s.length);
+            const sd = Math.sqrt(
+              s.reduce((a, b) => a + (b - mean) ** 2, 0) / s.length,
+            );
             const min = Math.min(...s),
               max = Math.max(...s);
             return `<div class="card metric"><small>${names[ch]}</small><b>${mean.toFixed(2)} µV</b><span class="muted">SD ${sd.toFixed(2)} · ${min.toFixed(2)}–${max.toFixed(2)} µV</span></div>`;
@@ -1296,12 +1689,24 @@ export default function Home() {
       const sum = getEl("baselineSummary");
       if (sum) sum.style.display = "block";
       const info = getEl("baselineInfo");
-      if (info) info.textContent = (auto ? "Baseline 30 s complete / ครบ 30 วินาที" : "Baseline stopped / หยุด Baseline") + " · Signal packets: " + packetCount;
-      setMuseStatus(auto ? "Baseline complete / Baseline เสร็จสิ้น" : "Baseline stopped / หยุด Baseline แล้ว");
+      if (info)
+        info.textContent =
+          (auto
+            ? "Baseline 30 s complete / ครบ 30 วินาที"
+            : "Baseline stopped / หยุด Baseline") +
+          " · Signal packets: " +
+          packetCount;
+      setMuseStatus(
+        auto
+          ? "Baseline complete / Baseline เสร็จสิ้น"
+          : "Baseline stopped / หยุด Baseline แล้ว",
+      );
       const eegChannels = baselineSamples.map((s, ch) => {
         if (!s.length) return { name: names[ch], samples: 0 };
         const mean = s.reduce((a, b) => a + b, 0) / s.length;
-        const sd = Math.sqrt(s.reduce((a, b) => a + (b - mean) ** 2, 0) / s.length);
+        const sd = Math.sqrt(
+          s.reduce((a, b) => a + (b - mean) ** 2, 0) / s.length,
+        );
         return {
           name: names[ch],
           samples: s.length,
@@ -1311,7 +1716,11 @@ export default function Home() {
           max: Number(Math.max(...s).toFixed(2)),
         };
       });
-      journey.eeg = { recordedAt: new Date().toISOString(), packets: packetCount, channels: eegChannels };
+      journey.eeg = {
+        recordedAt: new Date().toISOString(),
+        packets: packetCount,
+        channels: eegChannels,
+      };
       saveJourney();
     }
 
@@ -1325,7 +1734,11 @@ export default function Home() {
       } catch (e) {}
       const target = devices.find((d) => d.id === lastId);
       if (!target) return;
-      setMuseStatus("Auto-reconnect to " + (target.name || "Muse") + "… / กำลังเชื่อมต่ออุปกรณ์เดิม");
+      setMuseStatus(
+        "Auto-reconnect to " +
+          (target.name || "Muse") +
+          "… / กำลังเชื่อมต่ออุปกรณ์เดิม",
+      );
       await connectMuseDevice(target, true);
     })();
 
@@ -1345,10 +1758,16 @@ export default function Home() {
         window.dispatchEvent(new Event("research-task-screen-left"));
         return;
       }
-      document.querySelectorAll("main > section").forEach((s) => s.classList.toggle("active", s.id === id));
+      document
+        .querySelectorAll("main > section")
+        .forEach((s) => s.classList.toggle("active", s.id === id));
       const nav = document.getElementById("mainNav");
-      if (nav) nav.querySelectorAll("[data-sec]").forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
-      if (id === "dashboard") window.dispatchEvent(new Event("research-dashboard-opened"));
+      if (nav)
+        nav
+          .querySelectorAll("[data-sec]")
+          .forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
+      if (id === "dashboard")
+        window.dispatchEvent(new Event("research-dashboard-opened"));
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
 
@@ -1420,14 +1839,18 @@ export default function Home() {
       window.removeEventListener("appinstalled", onInstalled);
       window.removeEventListener("research-task-ended", onResearchTaskEnded);
       window.removeEventListener("research-task-start", onResearchTaskStart);
-      window.removeEventListener("research-session-finished", onResearchSessionFinished);
+      window.removeEventListener(
+        "research-session-finished",
+        onResearchSessionFinished,
+      );
       finishTaskBtn?.removeEventListener("click", onFinishTaskClick);
       if (installBtn) installBtn.removeEventListener("click", onInstallClick);
     };
   }, []);
 
   const call = (name, ...args) => {
-    if (typeof window !== "undefined" && typeof window[name] === "function") window[name](...args);
+    if (typeof window !== "undefined" && typeof window[name] === "function")
+      window[name](...args);
   };
 
   return (
@@ -1443,7 +1866,10 @@ export default function Home() {
             background: "linear-gradient(135deg,#050b14,#0b1e35)",
           }}
         >
-          <div className="card" style={{ width: "min(470px,100%)", textAlign: "center" }}>
+          <div
+            className="card"
+            style={{ width: "min(470px,100%)", textAlign: "center" }}
+          >
             <div className="brand" style={{ marginBottom: "8px" }}>
               CogniLoad<span>-XAI</span>
             </div>
@@ -1453,23 +1879,62 @@ export default function Home() {
       )}
 
       {/* ---------- Auth screen ---------- */}
-      <div id="authScreen" className="auth-bg" style={{ display: authed === false ? "grid" : "none" }}>
-        <canvas id="authWave" width="1600" height="420" aria-hidden="true"></canvas>
+      <div
+        id="authScreen"
+        className="auth-bg"
+        style={{ display: authed === false ? "grid" : "none" }}
+      >
+        <canvas
+          id="authWave"
+          width="1600"
+          height="420"
+          aria-hidden="true"
+        ></canvas>
         <div className="auth-inner">
           <div className="auth-logo">🧠</div>
           <div className="brand" style={{ fontSize: "26px" }}>
             CogniLoad<span>-XAI</span>
           </div>
-          <button type="button" className="secondary" lang={locale === "th" ? "en" : "th"} aria-label={locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"} onClick={() => setLocale(locale === "th" ? "en" : "th")}>{locale === "th" ? "English" : "ไทย"}</button>
-          <p className="muted" style={{ margin: "4px 0 0" }}>Cognitive Assessment System / ระบบประเมินการรู้คิด</p>
+          <button
+            type="button"
+            className="secondary"
+            lang={locale === "th" ? "en" : "th"}
+            aria-label={
+              locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"
+            }
+            onClick={() => setLocale(locale === "th" ? "en" : "th")}
+          >
+            {locale === "th" ? "English" : "ไทย"}
+          </button>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            Cognitive Assessment System / ระบบประเมินการรู้คิด
+          </p>
           <div className="auth-card">
-            <h2 id="authTitle">{mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Register / สมัครสมาชิก"}</h2>
+            <h2 id="authTitle">
+              {mode === "login"
+                ? "Sign in / เข้าสู่ระบบ"
+                : "Register / สมัครสมาชิก"}
+            </h2>
             <p className="muted">Research workspace / ระบบสำหรับผู้วิจัย</p>
             <div className="auth-tabs">
-              <button type="button" className={"auth-tab" + (mode === "login" ? " active" : "")} onClick={() => switchMode("login")}>
+              <button
+                type="button"
+                className={"auth-tab" + (mode === "login" ? " active" : "")}
+                onClick={() => switchMode("login")}
+              >
                 Sign in
               </button>
-              {appConfig?.registrationEnabled && <button type="button" className={"auth-tab" + (mode === "register" ? " active" : "")} onClick={() => switchMode("register")}>Register</button>}
+              {appConfig?.registrationEnabled && (
+                <button
+                  type="button"
+                  className={
+                    "auth-tab" + (mode === "register" ? " active" : "")
+                  }
+                  onClick={() => switchMode("register")}
+                >
+                  Register
+                </button>
+              )}
             </div>
             <form
               onSubmit={(e) => {
@@ -1507,8 +1972,14 @@ export default function Home() {
                 <input
                   id="authPass"
                   type={showPassword ? "text" : "password"}
-                  autoComplete={mode === "register" ? "new-password" : "current-password"}
-                  placeholder={mode === "register" ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร" : "Your password / รหัสผ่านของคุณ"}
+                  autoComplete={
+                    mode === "register" ? "new-password" : "current-password"
+                  }
+                  placeholder={
+                    mode === "register"
+                      ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร"
+                      : "Your password / รหัสผ่านของคุณ"
+                  }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -1526,43 +1997,87 @@ export default function Home() {
                   />
                 </label>
               )}
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", flexDirection: "row", margin: "10px 0" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flexDirection: "row",
+                  margin: "10px 0",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={showPassword}
                   onChange={(e) => setShowPassword(e.target.checked)}
                   style={{ width: "auto", margin: 0 }}
                 />
-                <span style={{ fontWeight: 400 }}>Show password / แสดงรหัสผ่าน</span>
+                <span style={{ fontWeight: 400 }}>
+                  Show password / แสดงรหัสผ่าน
+                </span>
               </label>
               <div className="controls">
                 <button type="submit" disabled={busy} style={{ width: "100%" }}>
-                  {busy ? "Please wait… / กำลังดำเนินการ" : mode === "login" ? "Sign in / เข้าสู่ระบบ" : "Create account / สมัครสมาชิก"}
+                  {busy
+                    ? "Please wait… / กำลังดำเนินการ"
+                    : mode === "login"
+                      ? "Sign in / เข้าสู่ระบบ"
+                      : "Create account / สมัครสมาชิก"}
                 </button>
               </div>
             </form>
-            <div id="authMsg" className="muted" style={authError ? { color: "#ff8b8b" } : undefined} aria-live="polite">
-              {authMessage || configError ||
+            <div
+              id="authMsg"
+              className="muted"
+              style={authError ? { color: "#ff8b8b" } : undefined}
+              aria-live="polite"
+            >
+              {authMessage ||
+                configError ||
                 (mode === "register"
                   ? "สมัครสมาชิกเพื่อเริ่มการทดลอง / Create an account to start the study."
-                  : appConfig?.registrationEnabled ? "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one." : "ติดต่อผู้ดูแลเพื่อขอบัญชี / Contact the administrator for an account.")}
+                  : appConfig?.registrationEnabled
+                    ? "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one."
+                    : "ติดต่อผู้ดูแลเพื่อขอบัญชี / Contact the administrator for an account.")}
             </div>
           </div>
           <p className="auth-foot">
-            📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
+            📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG
+            ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
           </p>
         </div>
       </div>
 
       {/* ---------- App shell ---------- */}
-      <div id="appShell" style={{ display: authed === true ? "block" : "none" }}>
+      <div
+        id="appShell"
+        style={{ display: authed === true ? "block" : "none" }}
+      >
         <header>
           <div className="brand">
             CogniLoad<span>-XAI</span>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-            <div className="badge" id="studyLiveBadge">Muse EEG Research Workspace</div>
-            <button type="button" className="secondary" id="langBtn" lang={locale === "th" ? "en" : "th"} aria-label={locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"} onClick={() => setLocale(locale === "th" ? "en" : "th")}>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <div className="badge" id="studyLiveBadge">
+              Muse EEG Research Workspace
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              id="langBtn"
+              lang={locale === "th" ? "en" : "th"}
+              aria-label={
+                locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"
+              }
+              onClick={() => setLocale(locale === "th" ? "en" : "th")}
+            >
               {locale === "th" ? "English" : "ไทย"}
             </button>
             {account && <div className="badge">👤 {account}</div>}
@@ -1580,7 +2095,12 @@ export default function Home() {
               ["history", "🕘 Assessment history / ประวัติเดิม"],
               ...(isAdmin ? [["admin", "🔐 Admin / ผู้ดูแล"]] : []),
             ].map(([sec, label]) => (
-              <button key={sec} data-sec={sec} className={sec === "journey" ? "active" : ""} onClick={() => call("showSection", sec)}>
+              <button
+                key={sec}
+                data-sec={sec}
+                className={sec === "journey" ? "active" : ""}
+                onClick={() => call("showSection", sec)}
+              >
                 {label}
               </button>
             ))}
@@ -1592,12 +2112,28 @@ export default function Home() {
                 <div>
                   <span className="study-kicker">COGNILOAD · MUSE EEG</span>
                   <h1>ห้องทดลอง EEG</h1>
-                  <p>ตั้งค่ารอบทดลอง เชื่อมต่อ Muse บันทึกสัญญาณจริง และส่งออกข้อมูลพร้อม marker</p>
+                  <p>
+                    ตั้งค่ารอบทดลอง เชื่อมต่อ Muse บันทึกสัญญาณจริง
+                    และส่งออกข้อมูลพร้อม marker
+                  </p>
                 </div>
                 <span className="pill">Research use · ไม่ใช่การวินิจฉัย</span>
               </div>
-              <ResearchSession key={accountEmail || "signed-out"} locale={locale} enabled={authed === true} accountEmail={accountEmail} studyConfig={appConfig?.study} configError={configError} />
-              <div className="grid" style={{ gridTemplateColumns: "repeat(5,1fr)", display: "none" }}>
+              <ResearchSession
+                key={accountEmail || "signed-out"}
+                locale={locale}
+                enabled={authed === true}
+                accountEmail={accountEmail}
+                studyConfig={appConfig?.study}
+                configError={configError}
+              />
+              <div
+                className="grid"
+                style={{
+                  gridTemplateColumns: "repeat(5,1fr)",
+                  display: "none",
+                }}
+              >
                 <div className="card metric">
                   <small>1</small>
                   <b style={{ fontSize: "16px" }}>Profile</b>
@@ -1638,10 +2174,16 @@ export default function Home() {
               <div className="card" style={{ marginTop: "14px" }}>
                 <div className="hero">
                   <div>
-                    <h3 style={{ marginBottom: "6px" }}>03 · Muse EEG / ตรวจสัญญาณสด</h3>
-                    <p className="muted">Web Bluetooth · TP9, AF7, AF8, TP10 · 256 Hz</p>
+                    <h3 style={{ marginBottom: "6px" }}>
+                      03 · Muse EEG / ตรวจสัญญาณสด
+                    </h3>
+                    <p className="muted">
+                      Web Bluetooth · TP9, AF7, AF8, TP10 · 256 Hz
+                    </p>
                   </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  <div
+                    style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
+                  >
                     <span id="chromeStatus" className="pill">
                       Checking browser…
                     </span>
@@ -1651,100 +2193,245 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="controls">
-                  <button id="connectMuseBtn" type="button" style={{ fontSize: "17px", padding: "14px 22px" }}>
+                  <button
+                    id="connectMuseBtn"
+                    type="button"
+                    style={{ fontSize: "17px", padding: "14px 22px" }}
+                  >
                     Connect Muse / เชื่อมต่อ Muse
                   </button>
 
-                  <button id="disconnectMuseBtn" className="secondary" type="button" disabled>
+                  <button
+                    id="disconnectMuseBtn"
+                    className="secondary"
+                    type="button"
+                    disabled
+                  >
                     Disconnect
                   </button>
-                  <button id="baselineBtn" className="secondary" type="button" disabled>
+                  <button
+                    id="baselineBtn"
+                    className="secondary"
+                    type="button"
+                    disabled
+                  >
                     Start 30-sec Baseline / เริ่ม Baseline
                   </button>
-                  <button id="stopBaselineBtn" className="secondary" type="button" disabled>
+                  <button
+                    id="stopBaselineBtn"
+                    className="secondary"
+                    type="button"
+                    disabled
+                  >
                     Stop Baseline / หยุด
                   </button>
                 </div>
-                <div id="btHelp" className="notice" style={{ display: "none" }}></div>
-                <div id="museGattStages" style={{ display: "flex", flexWrap: "wrap", gap: "10px", margin: "10px 0", fontSize: "12px" }}>
-                  <span data-stage="found" data-label="Muse Found" style={{ opacity: ".5" }}>
+                <div
+                  id="btHelp"
+                  className="notice"
+                  style={{ display: "none" }}
+                ></div>
+                <div
+                  id="museGattStages"
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "10px",
+                    margin: "10px 0",
+                    fontSize: "12px",
+                  }}
+                >
+                  <span
+                    data-stage="found"
+                    data-label="Muse Found"
+                    style={{ opacity: ".5" }}
+                  >
                     ○ Muse Found
                   </span>
-                  <span data-stage="gatt" data-label="GATT Connected" style={{ opacity: ".5" }}>
+                  <span
+                    data-stage="gatt"
+                    data-label="GATT Connected"
+                    style={{ opacity: ".5" }}
+                  >
                     ○ GATT Connected
                   </span>
-                  <span data-stage="service" data-label="Service Found" style={{ opacity: ".5" }}>
+                  <span
+                    data-stage="service"
+                    data-label="Service Found"
+                    style={{ opacity: ".5" }}
+                  >
                     ○ Service Found
                   </span>
-                  <span data-stage="eeg" data-label="EEG Receiving" style={{ opacity: ".5" }}>
+                  <span
+                    data-stage="eeg"
+                    data-label="EEG Receiving"
+                    style={{ opacity: ".5" }}
+                  >
                     ○ EEG Receiving
                   </span>
                 </div>
                 <div className="muted" style={{ marginTop: "8px" }}>
-                  เปิด Muse → กด Connect Muse → เลือก <b>Muse หรือ MuseS</b> ในหน้าต่าง Bluetooth → รอให้สถานะแสดง “EEG ครบ 4 ช่อง” ก่อนเริ่มบันทึก
+                  เปิด Muse → กด Connect Muse → เลือก <b>Muse หรือ MuseS</b>{" "}
+                  ในหน้าต่าง Bluetooth → รอให้สถานะแสดง “EEG ครบ 4 ช่อง”
+                  ก่อนเริ่มบันทึก
                 </div>
 
-                <div id="installBox" className="notice" style={{ display: "none" }}>
+                <div
+                  id="installBox"
+                  className="notice"
+                  style={{ display: "none" }}
+                >
                   <b>Install CogniLoad-XAI / ติดตั้งเป็นแอป</b>
                   <br />
-                  เมื่อติดตั้งแล้วสามารถเปิด CogniLoad-XAI จาก Mac ได้เหมือนแอปทั่วไป โดยไม่ต้องเปิดไฟล์หรือ Terminal
+                  เมื่อติดตั้งแล้วสามารถเปิด CogniLoad-XAI จาก Mac
+                  ได้เหมือนแอปทั่วไป โดยไม่ต้องเปิดไฟล์หรือ Terminal
                   <div className="controls">
                     <button id="installBtn" type="button">
                       Install App / ติดตั้งแอป
                     </button>
                   </div>
                 </div>
-                <div className="grid" style={{ gridTemplateColumns: "repeat(4,1fr)" }}>
+                <div
+                  className="grid"
+                  style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+                >
                   <div className="card metric">
                     <small>TP9</small>
                     <b id="ch0">—</b>
                     <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
-                    <div id="muse50_0" className="muted muse-line-noise">50 Hz: —</div>
+                    <div id="muse50_0" className="muted muse-line-noise">
+                      50 Hz: —
+                    </div>
                   </div>
                   <div className="card metric">
                     <small>AF7</small>
                     <b id="ch1">—</b>
                     <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
-                    <div id="muse50_1" className="muted muse-line-noise">50 Hz: —</div>
+                    <div id="muse50_1" className="muted muse-line-noise">
+                      50 Hz: —
+                    </div>
                   </div>
                   <div className="card metric">
                     <small>AF8</small>
                     <b id="ch2">—</b>
                     <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
-                    <div id="muse50_2" className="muted muse-line-noise">50 Hz: —</div>
+                    <div id="muse50_2" className="muted muse-line-noise">
+                      50 Hz: —
+                    </div>
                   </div>
                   <div className="card metric">
                     <small>TP10</small>
                     <b id="ch3">—</b>
                     <span className="muted">µV · ตัวอย่างดิบล่าสุด</span>
-                    <div id="muse50_3" className="muted muse-line-noise">50 Hz: —</div>
+                    <div id="muse50_3" className="muted muse-line-noise">
+                      50 Hz: —
+                    </div>
                   </div>
                 </div>
-                <canvas id="museCanvas" width="1100" height="220" style={{ marginTop: "14px" }}></canvas>
-                <p className="muted muse-plot-note">กราฟแสดงประมาณ 2 วินาทีล่าสุด โดยหักค่าเฉลี่ยของแต่ละช่องและปรับสเกลอัตโนมัติ ค่าใน CSV ยังเป็นสัญญาณดิบ ไม่ได้กรอง 50 Hz</p>
-                <div id="museNoiseWarning" className="study-signal-warning" role="status" style={{ display: "none" }}></div>
-                <div style={{ marginTop: "12px", background: "#10243b", borderRadius: "10px", overflow: "hidden", height: "12px" }}>
-                  <div id="baselineProgress" style={{ height: "100%", width: "0%", background: "#42d9f5", transition: "width .2s linear" }}></div>
+                <canvas
+                  id="museCanvas"
+                  width="1100"
+                  height="220"
+                  style={{ marginTop: "14px" }}
+                ></canvas>
+                <p className="muted muse-plot-note">
+                  กราฟแสดงประมาณ 2 วินาทีล่าสุด
+                  โดยหักค่าเฉลี่ยของแต่ละช่องและปรับสเกลอัตโนมัติ ค่าใน CSV
+                  ยังเป็นสัญญาณดิบ ไม่ได้กรอง 50 Hz
+                </p>
+                <div
+                  id="museNoiseWarning"
+                  className="study-signal-warning"
+                  role="status"
+                  style={{ display: "none" }}
+                ></div>
+                <div
+                  style={{
+                    marginTop: "12px",
+                    background: "#10243b",
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                    height: "12px",
+                  }}
+                >
+                  <div
+                    id="baselineProgress"
+                    style={{
+                      height: "100%",
+                      width: "0%",
+                      background: "#42d9f5",
+                      transition: "width .2s linear",
+                    }}
+                  ></div>
                 </div>
-                <div id="baselineInfo" className="muted" style={{ marginTop: "10px" }}>
+                <div
+                  id="baselineInfo"
+                  className="muted"
+                  style={{ marginTop: "10px" }}
+                >
                   Baseline: not recorded / ยังไม่ได้บันทึก · Signal packets: 0
                 </div>
                 <div
                   id="baselineSummary"
-                  style={{ display: "none", marginTop: "14px", padding: "14px", border: "1px solid rgba(255,255,255,.12)", borderRadius: "12px", background: "rgba(8,21,34,.55)" }}
+                  style={{
+                    display: "none",
+                    marginTop: "14px",
+                    padding: "14px",
+                    border: "1px solid rgba(255,255,255,.12)",
+                    borderRadius: "12px",
+                    background: "rgba(8,21,34,.55)",
+                  }}
                 >
-                  <div style={{ fontWeight: 700, marginBottom: "10px" }}>Baseline 30-second Summary / สรุปผล Baseline 30 วินาที</div>
-                  <div id="baselineSummaryGrid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: "10px" }}></div>
+                  <div style={{ fontWeight: 700, marginBottom: "10px" }}>
+                    Baseline 30-second Summary / สรุปผล Baseline 30 วินาที
+                  </div>
+                  <div
+                    id="baselineSummaryGrid"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))",
+                      gap: "10px",
+                    }}
+                  ></div>
                   <div className="muted" style={{ marginTop: "10px" }}>
-                    ค่าด้านล่างเป็นสรุปคุณภาพ/สถิติของสัญญาณ EEG ที่บันทึก ไม่ใช่ผลวินิจฉัยทางการแพทย์
+                    ค่าด้านล่างเป็นสรุปคุณภาพ/สถิติของสัญญาณ EEG ที่บันทึก
+                    ไม่ใช่ผลวินิจฉัยทางการแพทย์
                   </div>
                 </div>
               </div>
-              <details className="study-legacy"><summary>เครื่องมือประเมินเดิม / Existing assessment tools</summary><div id="stepbox" className="card" style={{ marginTop: "14px" }}></div></details>
+              <details className="study-legacy">
+                <summary>
+                  เครื่องมือประเมินเดิม / Existing assessment tools
+                </summary>
+                <div
+                  id="stepbox"
+                  className="card"
+                  style={{ marginTop: "14px" }}
+                ></div>
+              </details>
             </section>
 
             {/* ---------- Dashboard ---------- */}
-            {isAdmin && <section id="admin"><div className="hero"><div><h1>{locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}</h1><p>{locale === "th" ? "ตั้งค่าการทดลองและดูผลสรุปผู้เข้าร่วม" : "Configure the study and review participant summaries"}</p></div></div><AdminPanel locale={locale} enabled={authed === true && isAdmin} /></section>}
+            {isAdmin && (
+              <section id="admin">
+                <div className="hero">
+                  <div>
+                    <h1>
+                      {locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}
+                    </h1>
+                    <p>
+                      {locale === "th"
+                        ? "ตั้งค่าการทดลองและดูผลสรุปผู้เข้าร่วม"
+                        : "Configure the study and review participant summaries"}
+                    </p>
+                  </div>
+                </div>
+                <AdminPanel
+                  locale={locale}
+                  enabled={authed === true && isAdmin}
+                />
+              </section>
+            )}
 
             <section id="dashboard">
               <div className="hero">
@@ -1753,64 +2440,86 @@ export default function Home() {
                   <p>ภาพรวมข้อมูล EEG จากรอบทดลองที่บันทึกในเบราว์เซอร์นี้</p>
                 </div>
               </div>
-              <ResearchDashboard key={accountEmail || "signed-out"} locale={locale} accountEmail={accountEmail} />
+              <ResearchDashboard
+                key={accountEmail || "signed-out"}
+                locale={locale}
+                accountEmail={accountEmail}
+              />
               <details className="study-legacy">
-                <summary>ผลแบบประเมินเดิม / Existing assessment overview</summary>
-                <div className="controls"><button onClick={() => call("exportCSV")}>Export assessment CSV</button></div>
-              <div id="dashRisk" className="risk-banner">
-                Complete an assessment to view the screening level. / ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง
-              </div>
-              <div className="grid">
-                <div className="card metric">
-                  <small>Current member</small>
-                  <b id="dMember" style={{ fontSize: "17px" }}>
-                    —
-                  </b>
+                <summary>
+                  ผลแบบประเมินเดิม / Existing assessment overview
+                </summary>
+                <div className="controls">
+                  <button onClick={() => call("exportCSV")}>
+                    Export assessment CSV
+                  </button>
                 </div>
-                <div className="card metric">
-                  <small>Login count</small>
-                  <b id="dLogins">0</b>
+                <div id="dashRisk" className="risk-banner">
+                  Complete an assessment to view the screening level. /
+                  ทำการประเมินให้ครบเพื่อดูระดับคัดกรอง
                 </div>
-                <div className="card metric">
-                  <small>MMSE</small>
-                  <b id="dMMSE">—</b>
-                </div>
-                <div className="card metric">
-                  <small>Assessments</small>
-                  <b id="dAssess">0</b>
-                </div>
-              </div>
-              <div className="two">
-                <div className="card">
-                  <h3>Game performance / ผลเกม</h3>
-                  <div id="gameChart" className="chartbox"></div>
-                  <p className="muted">Accuracy by completed cognitive game.</p>
-                </div>
-                <div className="card">
-                  <h3>Screening level / ระดับคัดกรอง</h3>
-                  <div className="donutwrap">
-                    <div id="riskDonut" className="donut"></div>
-                    <div id="riskDonutText" className="donuttext">
-                      No data
-                    </div>
+                <div className="grid">
+                  <div className="card metric">
+                    <small>Current member</small>
+                    <b id="dMember" style={{ fontSize: "17px" }}>
+                      —
+                    </b>
                   </div>
-                  <p id="riskExplain" className="muted" style={{ textAlign: "center", marginTop: "15px" }}></p>
+                  <div className="card metric">
+                    <small>Login count</small>
+                    <b id="dLogins">0</b>
+                  </div>
+                  <div className="card metric">
+                    <small>MMSE</small>
+                    <b id="dMMSE">—</b>
+                  </div>
+                  <div className="card metric">
+                    <small>Assessments</small>
+                    <b id="dAssess">0</b>
+                  </div>
                 </div>
-              </div>
-              <div className="two">
-                <div className="card">
-                  <h3>Login history / ประวัติการเข้าสู่ระบบ</h3>
-                  <div id="loginHistory" className="muted"></div>
+                <div className="two">
+                  <div className="card">
+                    <h3>Game performance / ผลเกม</h3>
+                    <div id="gameChart" className="chartbox"></div>
+                    <p className="muted">
+                      Accuracy by completed cognitive game.
+                    </p>
+                  </div>
+                  <div className="card">
+                    <h3>Screening level / ระดับคัดกรอง</h3>
+                    <div className="donutwrap">
+                      <div id="riskDonut" className="donut"></div>
+                      <div id="riskDonutText" className="donuttext">
+                        No data
+                      </div>
+                    </div>
+                    <p
+                      id="riskExplain"
+                      className="muted"
+                      style={{ textAlign: "center", marginTop: "15px" }}
+                    ></p>
+                  </div>
                 </div>
-                <div className="card">
-                  <h3>Interpretation note / หมายเหตุ</h3>
-                  <p className="muted">
-                    Green/yellow/red is a dashboard communication layer. MMSE-Thai 2002 has validated education-specific screening cut-offs, but it does not provide an official
-                    three-color severity classification. Red is therefore used for a score at/below the MMSE screening cut-off; yellow is used for a score within 3 points above
-                    that cut-off; green is more than 3 points above it. Game results are shown separately and do not change the MMSE screening category.
-                  </p>
+                <div className="two">
+                  <div className="card">
+                    <h3>Login history / ประวัติการเข้าสู่ระบบ</h3>
+                    <div id="loginHistory" className="muted"></div>
+                  </div>
+                  <div className="card">
+                    <h3>Interpretation note / หมายเหตุ</h3>
+                    <p className="muted">
+                      Green/yellow/red is a dashboard communication layer.
+                      MMSE-Thai 2002 has validated education-specific screening
+                      cut-offs, but it does not provide an official three-color
+                      severity classification. Red is therefore used for a score
+                      at/below the MMSE screening cut-off; yellow is used for a
+                      score within 3 points above that cut-off; green is more
+                      than 3 points above it. Game results are shown separately
+                      and do not change the MMSE screening category.
+                    </p>
+                  </div>
                 </div>
-              </div>
               </details>
             </section>
 
@@ -1859,13 +2568,19 @@ export default function Home() {
             <section id="acquisition">
               <h1>EEG Acquisition</h1>
               <div className="card">
-                <p className="muted">Import EEG data for prototype analysis. CSV demo parsing is performed locally in your browser.</p>
+                <p className="muted">
+                  Import EEG data for prototype analysis. CSV demo parsing is
+                  performed locally in your browser.
+                </p>
                 <div className="controls">
                   <label className="filelabel">
                     Import CSV
                     <input id="file" type="file" accept=".csv" hidden />
                   </label>
-                  <button className="secondary" onClick={() => call("simulate")}>
+                  <button
+                    className="secondary"
+                    onClick={() => call("simulate")}
+                  >
                     Use Demo EEG
                   </button>
                 </div>
@@ -1905,7 +2620,11 @@ export default function Home() {
                       </tr>
                     </tbody>
                   </table>
-                  <button onClick={() => alertUser("Demo preprocessing completed.")}>Run Preprocessing</button>
+                  <button
+                    onClick={() => alertUser("Demo preprocessing completed.")}
+                  >
+                    Run Preprocessing
+                  </button>
                 </div>
                 <div className="card">
                   <h3>Quality Control</h3>
@@ -1935,7 +2654,9 @@ export default function Home() {
                   </thead>
                   <tbody id="featureRows"></tbody>
                 </table>
-                <button onClick={() => call("makeFeatures")}>Extract Features</button>
+                <button onClick={() => call("makeFeatures")}>
+                  Extract Features
+                </button>
               </div>
             </section>
 
@@ -1983,7 +2704,10 @@ export default function Home() {
                     </tr>
                   </tbody>
                 </table>
-                <p className="muted">Values are demonstration data; replace with validated cross-validation/test results from your study.</p>
+                <p className="muted">
+                  Values are demonstration data; replace with validated
+                  cross-validation/test results from your study.
+                </p>
               </div>
             </section>
 
@@ -1992,20 +2716,32 @@ export default function Home() {
               <h1>Cognitive Screening / แบบคัดกรองการรู้คิด</h1>
               <div className="card">
                 <p>
-                  <b>Mini-Cog© integration placeholder for authorized research use</b>
+                  <b>
+                    Mini-Cog© integration placeholder for authorized research
+                    use
+                  </b>
                 </p>
                 <p className="muted">
-                  The research version should use the official Thai Mini-Cog© form and scoring only after obtaining permission for research use. This app intentionally does not
-                  reproduce or modify the copyrighted test items.
+                  The research version should use the official Thai Mini-Cog©
+                  form and scoring only after obtaining permission for research
+                  use. This app intentionally does not reproduce or modify the
+                  copyrighted test items.
                 </p>
                 <p className="muted">
-                  สำหรับการวิจัย ควรใช้แบบ Mini-Cog© ฉบับภาษาไทยอย่างเป็นทางการและเกณฑ์การให้คะแนนหลังได้รับอนุญาตสำหรับการวิจัย
+                  สำหรับการวิจัย ควรใช้แบบ Mini-Cog©
+                  ฉบับภาษาไทยอย่างเป็นทางการและเกณฑ์การให้คะแนนหลังได้รับอนุญาตสำหรับการวิจัย
                   ระบบนี้จึงไม่คัดลอกหรือดัดแปลงข้อคำถามของแบบทดสอบไว้ในเว็บ
                 </p>
                 <div className="formgrid">
                   <label>
                     Mini-Cog total score / คะแนนรวม Mini-Cog
-                    <input id="mcscore" type="number" min="0" max="5" placeholder="0–5" />
+                    <input
+                      id="mcscore"
+                      type="number"
+                      min="0"
+                      max="5"
+                      placeholder="0–5"
+                    />
                   </label>
                   <label>
                     Assessment date / วันที่ประเมิน
@@ -2013,44 +2749,73 @@ export default function Home() {
                   </label>
                 </div>
                 <div className="controls">
-                  <button onClick={() => call("miniCogInterpret")}>Interpret / แปลผล</button>
+                  <button onClick={() => call("miniCogInterpret")}>
+                    Interpret / แปลผล
+                  </button>
                 </div>
                 <div id="mcresult" className="notice">
-                  Enter an authorized Mini-Cog score. / กรุณากรอกคะแนนจากแบบประเมินที่ได้รับอนุญาต
+                  Enter an authorized Mini-Cog score. /
+                  กรุณากรอกคะแนนจากแบบประเมินที่ได้รับอนุญาต
                 </div>
               </div>
               <div className="card" style={{ marginTop: "14px" }}>
                 <h3>Research data linkage / การเชื่อมโยงข้อมูลวิจัย</h3>
                 <p className="muted">
-                  Store the screening score separately from EEG/game biomarkers, then test associations with workload features. Do not use the game score as a diagnosis of
-                  Alzheimer’s disease.
+                  Store the screening score separately from EEG/game biomarkers,
+                  then test associations with workload features. Do not use the
+                  game score as a diagnosis of Alzheimer’s disease.
                 </p>
               </div>
             </section>
 
             {/* ---------- Games ---------- */}
             <section id="games">
-              <h1>Experimental Cognitive Games / เกมประเมินการรู้คิดเชิงทดลอง</h1>
-              <p className="muted">หากกำลังบันทึก EEG ระบบจะใส่ marker อัตโนมัติเมื่อแสดงสิ่งเร้าและเมื่อผู้เข้าร่วมตอบแต่ละครั้ง ตรวจเวลาของช่วงทดลองได้ที่แถบด้านบน</p>
-              <p className="notice">
-                These three tasks are newly designed experimental paradigms for this prototype. They are not validated Alzheimer diagnostic tests. Research validation is required
-                before clinical interpretation.
+              <h1>
+                Experimental Cognitive Games / เกมประเมินการรู้คิดเชิงทดลอง
+              </h1>
+              <p className="muted">
+                หากกำลังบันทึก EEG ระบบจะใส่ marker
+                อัตโนมัติเมื่อแสดงสิ่งเร้าและเมื่อผู้เข้าร่วมตอบแต่ละครั้ง
+                ตรวจเวลาของช่วงทดลองได้ที่แถบด้านบน
               </p>
-              <div className="grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+              <p className="notice">
+                These three tasks are newly designed experimental paradigms for
+                this prototype. They are not validated Alzheimer diagnostic
+                tests. Research validation is required before clinical
+                interpretation.
+              </p>
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "repeat(3,1fr)" }}
+              >
                 <div className="card">
                   <h3>1. Odd or Even / คี่หรือคู่</h3>
-                  <p className="muted">ตัดสินความคี่คู่ของตัวเลข บันทึกความถูกต้องและเวลาตอบสนอง</p>
-                  <button onClick={() => call("startGame", 1)}>Start / เริ่ม</button>
+                  <p className="muted">
+                    ตัดสินความคี่คู่ของตัวเลข บันทึกความถูกต้องและเวลาตอบสนอง
+                  </p>
+                  <button onClick={() => call("startGame", 1)}>
+                    Start / เริ่ม
+                  </button>
                 </div>
                 <div className="card">
                   <h3>2. Echo Sequence</h3>
-                  <p className="muted">ลำดับสะท้อน: ทดสอบ temporal sequence memory และ delayed recognition</p>
-                  <button onClick={() => call("startGame", 2)}>Start / เริ่ม</button>
+                  <p className="muted">
+                    ลำดับสะท้อน: ทดสอบ temporal sequence memory และ delayed
+                    recognition
+                  </p>
+                  <button onClick={() => call("startGame", 2)}>
+                    Start / เริ่ม
+                  </button>
                 </div>
                 <div className="card">
                   <h3>3. Pattern Drift</h3>
-                  <p className="muted">รูปแบบเปลี่ยนแปลง: ทดสอบ visual change detection, attention และ processing speed</p>
-                  <button onClick={() => call("startGame", 3)}>Start / เริ่ม</button>
+                  <p className="muted">
+                    รูปแบบเปลี่ยนแปลง: ทดสอบ visual change detection, attention
+                    และ processing speed
+                  </p>
+                  <button onClick={() => call("startGame", 3)}>
+                    Start / เริ่ม
+                  </button>
                 </div>
               </div>
               <div className="two">
@@ -2058,11 +2823,27 @@ export default function Home() {
                   <h3 id="gtitle">Game workspace / พื้นที่เกม</h3>
                   <div
                     id="gamebox"
-                    style={{ minHeight: "240px", display: "grid", placeItems: "center", border: "1px dashed #294963", borderRadius: "12px", padding: "20px" }}
+                    style={{
+                      minHeight: "240px",
+                      display: "grid",
+                      placeItems: "center",
+                      border: "1px dashed #294963",
+                      borderRadius: "12px",
+                      padding: "20px",
+                    }}
                   >
                     <span className="muted">Choose a game / เลือกเกม</span>
                   </div>
-                  <div className="controls"><button id="finishTaskBtn" type="button" className="secondary" hidden>จบกิจกรรม · เก็บ EEG ต่อ</button></div>
+                  <div className="controls">
+                    <button
+                      id="finishTaskBtn"
+                      type="button"
+                      className="secondary"
+                      hidden
+                    >
+                      จบกิจกรรม · เก็บ EEG ต่อ
+                    </button>
+                  </div>
                 </div>
                 <div className="card">
                   <h3>Digital biomarkers / ตัวชี้วัดดิจิทัล</h3>
@@ -2086,7 +2867,10 @@ export default function Home() {
                       </tr>
                     </tbody>
                   </table>
-                  <p className="muted">EEG event markers can later be synchronized to stimulus onset and responses.</p>
+                  <p className="muted">
+                    EEG event markers can later be synchronized to stimulus
+                    onset and responses.
+                  </p>
                 </div>
               </div>
             </section>
@@ -2095,8 +2879,12 @@ export default function Home() {
             <section id="history">
               <h1>Assessment History / ประวัติการประเมิน</h1>
               <div className="card">
-                <p className="muted">ประวัติผลการประเมินของสมาชิกที่เข้าสู่ระบบ</p>
-                <div id="historyTable">ยังไม่มีข้อมูล / No assessment history</div>
+                <p className="muted">
+                  ประวัติผลการประเมินของสมาชิกที่เข้าสู่ระบบ
+                </p>
+                <div id="historyTable">
+                  ยังไม่มีข้อมูล / No assessment history
+                </div>
                 <div className="controls">
                   <button onClick={() => call("exportCSV")}>Export CSV</button>
                 </div>
@@ -2148,8 +2936,14 @@ export default function Home() {
                 </div>
                 <div className="card">
                   <h3>Interpretation</h3>
-                  <p>The current demo prediction is influenced most strongly by the Theta/Alpha ratio and frontal Theta features.</p>
-                  <p className="notice">This describes model behavior, not a causal neurological interpretation.</p>
+                  <p>
+                    The current demo prediction is influenced most strongly by
+                    the Theta/Alpha ratio and frontal Theta features.
+                  </p>
+                  <p className="notice">
+                    This describes model behavior, not a causal neurological
+                    interpretation.
+                  </p>
                 </div>
               </div>
             </section>
