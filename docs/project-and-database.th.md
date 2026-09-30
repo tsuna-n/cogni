@@ -1,5 +1,7 @@
 # โปรเจกต์ CogniLoad-XAI และฐานข้อมูล
 
+เอกสารนี้เป็นภาพรวมฉบับย่อ อ่าน [คู่มือภาษาไทยฉบับละเอียดทุกการทำงาน](README.md) สำหรับขั้นตอนทุกหน้า, EEG/CSV, DBeaver, API และการติดตั้ง/ดูแลระบบ
+
 Source code: [tsuna-n/cogni](https://github.com/tsuna-n/cogni) · [ดาวน์โหลดโปรเจกต์ ZIP](https://github.com/tsuna-n/cogni/archive/refs/heads/main.zip)
 
 ## โปรเจกต์ทำอะไร
