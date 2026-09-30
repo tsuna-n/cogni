@@ -12,6 +12,7 @@ import {
   summarizeEegWindow,
 } from "@/lib/eeg-signal-quality.mjs";
 import { localizeText, startLocalization } from "@/lib/localization";
+import { MUSE_SERVICE, createMuseEegClient, museConnectionMessage } from "@/lib/muse/eeg-client.mjs";
 
 const AUTH_ERRORS = {
   invalid_email: "รูปแบบอีเมลไม่ถูกต้อง / Invalid email address",
@@ -1235,6 +1236,8 @@ export default function Home() {
       baselineSamples = [[], [], [], []],
       museConnected = false,
       museManualDisconnect = false;
+    let museConnectionBusy = false;
+    let museDevice = null;
     const plotBuffers = [[], [], [], []],
       maxPlot = 500;
     let latest = [null, null, null, null],
@@ -1381,9 +1384,9 @@ export default function Home() {
 
     let museModulePromise = null;
     let museModuleReady = null;
-    const MUSE_SERVICE = "0000fe8d-0000-1000-8000-00805f9b34fb";
 
     function setMuseStatus(message, isError = false) {
+      if (!isError && getEl("museErrorDetails")) getEl("museErrorDetails").style.display = "none";
       const s = getEl("museStatus");
       if (s) {
         s.textContent = message;
@@ -1433,8 +1436,8 @@ export default function Home() {
           .then((module) => {
             if (typeof module.MuseClient !== "function")
               throw new Error("MuseClient is unavailable");
-            museModuleReady = module;
-            return module;
+            museModuleReady = { ...module, MuseClient: createMuseEegClient(module.MuseClient) };
+            return museModuleReady;
           })
           .catch((error) => {
             // A transient chunk/load failure must be retryable on the next click.
@@ -1450,6 +1453,7 @@ export default function Home() {
       b.textContent = "Preparing Muse…";
       try {
         await loadMuseDriver();
+        if (museConnectionBusy) return;
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         setMuseStatus("Ready / พร้อมเชื่อมต่อ");
@@ -1519,10 +1523,13 @@ export default function Home() {
         },
       });
     }
-    async function connectMuseDevice(device, quiet = false) {
+    async function connectMuseDevice(device, quiet = false, ownsConnectionLock = false) {
+      if ((museConnectionBusy || museConnected) && !ownsConnectionLock) return;
+      museConnectionBusy = true;
       const b = getEl("connectMuseBtn");
       const label = device?.name || "Muse";
       resetStages();
+      setStage("found");
       try {
         b.disabled = true;
         b.textContent = "Connecting " + label + "…";
@@ -1530,31 +1537,26 @@ export default function Home() {
           setMuseStatus("Connecting to " + label + "… / กำลังเชื่อมต่อ");
         if (!museModuleReady) museModuleReady = await loadMuseDriver();
         museClient = new museModuleReady.MuseClient();
-        const gatt = device.gatt;
-        if (!gatt)
-          throw new Error(
-            "อุปกรณ์นี้ไม่มี Bluetooth GATT / Device has no Bluetooth GATT server",
-          );
-        if (!gatt.connected) await gatt.connect();
-        await museClient.connect(gatt);
+        museDevice = device;
+        await museClient.connect(device.gatt, { onStage: (stage) => {
+          setStage(stage);
+          setMuseStatus(stage === "gatt"
+            ? "2/4 เชื่อมต่อ Bluetooth แล้ว กำลังค้นหา Muse Service / Bluetooth connected; discovering Muse service"
+            : "3/4 พบ Muse Service แล้ว กำลังเปิดช่อง EEG / Muse service found; enabling EEG channels");
+        } });
         try {
           localStorage.setItem("museLastDeviceId", device.id);
         } catch (e) {}
-        if (!device.__museDiscHook) {
-          device.__museDiscHook = true;
-          device.addEventListener("gattserverdisconnected", onMuseDisconnected);
-        }
-        setStage("found");
-        setStage("gatt");
-        setStage("service");
+        device.addEventListener("gattserverdisconnected", onMuseDisconnected);
         setMuseStatus(
           label + " connected. Starting EEG… / เชื่อมต่อแล้ว กำลังเริ่ม EEG",
         );
 
-        await museClient.start();
-        setMuseStatus("EEG started. Waiting for first packet… / รอข้อมูล EEG");
-
         subscribeEeg();
+        await museClient.start();
+        if (!device.gatt.connected) throw Object.assign(new Error("Headset disconnected during EEG startup"), { museStage: "gatt" });
+        if (!window.__museReady)
+          setMuseStatus("4/4 เริ่ม EEG แล้ว กำลังรอข้อมูล / EEG started; waiting for data");
         museConnected = true;
         setMuseConnected(true, label);
         getEl("disconnectMuseBtn").disabled = false;
@@ -1565,31 +1567,16 @@ export default function Home() {
         setMuseConnected(false);
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
-        const n = err?.name || "Error",
-          m = err?.message || String(err);
-        if (quiet)
-          setMuseStatus(
-            "Auto-reconnect ไม่สำเร็จ (" +
-              (device?.name || "Muse") +
-              " อาจปิดอยู่) — กด Connect หรือเลือกจากรายการด้านบน",
-            true,
-          );
-        else if (n === "NotFoundError")
-          setMuseStatus(
-            "ไม่พบอุปกรณ์ " + label + " กรุณาเปิดเครื่องแล้วลองใหม่",
-            true,
-          );
-        else if (n === "NetworkError")
-          setMuseStatus(
-            "เชื่อมต่อ GATT ไม่สำเร็จ — ปิดแอป Muse อื่นที่ใช้อุปกรณ์นี้ ปิด/เปิด Muse แล้วลองใหม่ / Close other Muse apps, power-cycle the headset, and retry",
-            true,
-          );
-        else if (n === "SecurityError" || n === "NotAllowedError")
-          setMuseStatus(
-            "เบราว์เซอร์ไม่อนุญาต Bluetooth — เปิดเว็บผ่าน HTTPS/localhost และอนุญาตสิทธิ์ Bluetooth แล้วลองใหม่",
-            true,
-          );
-        else setMuseStatus("Muse connection error: " + n + " — " + m, true);
+        console.error("Muse connection failed", { device: label, stage: err?.museStage || "start", error: err });
+        device.removeEventListener("gattserverdisconnected", onMuseDisconnected);
+        setMuseStatus(museConnectionMessage(err, label), true);
+        getEl("museErrorDetails").style.display = "block";
+        getEl("museErrorText").textContent = [
+          `Device: ${label}`,
+          `Stage: ${err?.museStage || "start"}`,
+          err?.museUuid ? `UUID: ${err.museUuid}` : null,
+          `${err?.name || "Error"}: ${err?.message || String(err)}`,
+        ].filter(Boolean).join("\n");
         try {
           if (eegSub) eegSub.unsubscribe();
         } catch (e) {}
@@ -1598,10 +1585,17 @@ export default function Home() {
           if (museClient) museClient.disconnect();
         } catch (e) {}
         museClient = null;
+        museDevice = null;
+        getEl("disconnectMuseBtn").disabled = true;
+        getEl("baselineBtn").disabled = true;
+      } finally {
+        museConnectionBusy = false;
       }
     }
     function onMuseDisconnected() {
       if (museManualDisconnect) return;
+      museDevice?.removeEventListener("gattserverdisconnected", onMuseDisconnected);
+      museDevice = null;
       clearTimeout(baselineTimer);
       clearTimeout(baselineHardStop);
       clearInterval(baselineTick);
@@ -1629,6 +1623,7 @@ export default function Home() {
       );
     }
     async function connectMuse() {
+      if (museConnectionBusy || museConnected) return;
       resetStages();
       if (!window.isSecureContext) {
         setMuseStatus("ต้องเปิดผ่าน HTTPS", true);
@@ -1639,6 +1634,7 @@ export default function Home() {
         return;
       }
       const b = getEl("connectMuseBtn");
+      museConnectionBusy = true;
       b.disabled = true;
       b.textContent = "Select Muse-xxxx… / เลือก Muse…";
       setMuseStatus("1/4 เลือกอุปกรณ์ Muse หรือ MuseS ในหน้าต่าง Bluetooth");
@@ -1652,6 +1648,7 @@ export default function Home() {
           optionalServices: [MUSE_SERVICE],
         });
       } catch (err) {
+        museConnectionBusy = false;
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         if (err?.name === "NotFoundError")
@@ -1669,9 +1666,11 @@ export default function Home() {
           );
         return;
       }
-      await connectMuseDevice(device);
+      await connectMuseDevice(device, false, true);
     }
     async function disconnectMuse() {
+      museDevice?.removeEventListener("gattserverdisconnected", onMuseDisconnected);
+      museDevice = null;
       museManualDisconnect = true;
       setTimeout(() => {
         museManualDisconnect = false;
@@ -1806,7 +1805,7 @@ export default function Home() {
         lastId = localStorage.getItem("museLastDeviceId");
       } catch (e) {}
       const target = devices.find((d) => d.id === lastId);
-      if (!target) return;
+      if (!target || museConnectionBusy || museConnected) return;
       setMuseStatus(
         "Auto-reconnect to " +
           (target.name || "Muse") +
@@ -1906,6 +1905,7 @@ export default function Home() {
       } catch (e) {}
       try {
         museManualDisconnect = true;
+        museDevice?.removeEventListener("gattserverdisconnected", onMuseDisconnected);
         if (museClient) museClient.disconnect();
       } catch (e) {}
       connectMuseBtn.removeEventListener("click", connectMuse);
@@ -2531,6 +2531,10 @@ export default function Home() {
                   className="notice"
                   style={{ display: "none" }}
                 ></div>
+                <details id="museErrorDetails" className="notice" style={{ display: "none" }}>
+                  <summary>รายละเอียดการเชื่อมต่อ / Connection details</summary>
+                  <pre id="museErrorText" data-no-translate style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: "12px" }} />
+                </details>
                 <div
                   id="museGattStages"
                   style={{

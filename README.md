@@ -4,6 +4,8 @@ CogniLoad-XAI is a browser-based Muse 2 / Muse S (Classic protocol) EEG research
 
 The interface supports Thai and English. Use the **English / ไทย** button on the sign-in screen or in the app header to switch languages. The choice is saved in this browser and survives reloads. On first visit, the app chooses Thai for a Thai browser locale and English otherwise. Changing the interface language does not change recorded EEG data or CSV field names.
 
+Classic Muse connection initializes the control characteristic and all four EEG channels without requiring telemetry, gyroscope or accelerometer services. Missing optional sensors therefore do not prevent EEG recording. Discovery retries briefly when a service or characteristic is not yet available. Connection progress distinguishes device selection, Bluetooth/GATT, Muse service discovery and EEG startup. If initialization fails, expand **รายละเอียดการเชื่อมต่อ / Connection details** to see the failed stage, UUID and browser error. Chooser cancellation remains a separate message; an already selected headset is not reported as missing. Close other Muse apps before connecting a physical headset.
+
 ## Running a study session
 
 1. Sign in with a researcher account. Use Chrome or Edge on a computer or Android device over HTTPS or `localhost`; allow Bluetooth access.
