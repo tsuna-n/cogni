@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 360" fill="none">
+  <defs>
+    <linearGradient id="surface" x1="90" y1="25" x2="470" y2="340" gradientUnits="userSpaceOnUse"><stop stop-color="#1c2330"/><stop offset="1" stop-color="#12161e"/></linearGradient>
+    <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" stroke="#2b3544" stroke-width=".7"/></pattern>
+  </defs>
+  <circle cx="272" cy="185" r="156" fill="url(#surface)"/>
+  <circle cx="272" cy="185" r="140" stroke="#35445a" stroke-dasharray="4 8"/>
+  <path d="M114 304H474" stroke="#3a4860" stroke-width="3" stroke-linecap="round"/>
+  <rect x="250" y="78" width="275" height="203" rx="17" fill="#171d27" stroke="#536783" stroke-width="2"/>
+  <path d="M251 119H524" stroke="#344054"/>
+  <circle cx="269" cy="99" r="4" fill="#3b8ef1"/><circle cx="283" cy="99" r="4" fill="#a082d6"/><circle cx="297" cy="99" r="4" fill="#37af9b"/>
+  <text x="510" y="104" text-anchor="end" fill="#b8c7df" font-family="sans-serif" font-size="13" letter-spacing="1">EEG RESEARCH</text>
+  <rect x="266" y="132" width="242" height="128" rx="6" fill="#10151d"/>
+  <rect x="306" y="132" width="202" height="128" fill="url(#grid)"/>
+  <g font-family="monospace" font-size="12" fill="#b8c7df"><text x="274" y="153">TP9</text><text x="274" y="185">AF7</text><text x="274" y="217">AF8</text><text x="274" y="249">TP10</text></g>
+  <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m312 150 8-5 8 8 8-6 8 1 8-8 8 14 8-5 8 3 8-6 8 6 8-9 8 13 8-6 8 1 8-7 8 11 8-5 8 2 8-6 8 4 8-2 8 3" stroke="#398eee"/>
+    <path d="m312 182 8 5 8-11 8 8 8-6 8 4 8-2 8 7 8-12 8 10 8-5 8 4 8-10 8 12 8-4 8 2 8-5 8 1 8 7 8-9 8 3 8-1 8 3" stroke="#9475ce"/>
+    <path d="m312 214 8-3 8 8 8-6 8-4 8 7 8-11 8 15 8-6 8 3 8-5 8 2 8-6 8 11 8-4 8 3 8-7 8 10 8-6 8 2 8-5 8 4 8-1" stroke="#2aab96"/>
+    <path d="m312 246 8 2 8-7 8 11 8-6 8 2 8-4 8 6 8-8 8 5 8-1 8 4 8-10 8 12 8-7 8 5 8-2 8-6 8 11 8-5 8 2 8-4 8 2" stroke="#d99e3b"/>
+  </g>
+  <path d="M369 282v22M407 282v22M351 305h74" stroke="#718db3" stroke-width="4" stroke-linecap="round"/>
+  <ellipse cx="159" cy="179" rx="69" ry="91" fill="#1b222e" stroke="#7b97be" stroke-width="2"/>
+  <path d="m147 87 12-14 12 14M91 166q-15-9-15 11t15 11M227 166q15-9 15 11t-15 11" stroke="#7b97be" stroke-width="2"/>
+  <path d="M113 127q47-28 92 0M106 136q53-29 105 0" stroke="#3e516d" stroke-width="2"/>
+  <path d="M133 147q-22 0-20 20-14 12-1 26-8 20 15 25 7 19 31 11v-90q-19-16-25 8ZM185 147q22 0 20 20 14 12 1 26 8 20-15 25-7 19-31 11v-90q19-16 25 8Z" stroke="#536887" stroke-width="2"/>
+  <g stroke="#171d27" stroke-width="3"><circle cx="126" cy="118" r="8" fill="#9475ce"/><circle cx="192" cy="118" r="8" fill="#2aab96"/><circle cx="92" cy="205" r="8" fill="#398eee"/><circle cx="226" cy="205" r="8" fill="#d99e3b"/></g>
+  <g font-family="monospace" font-size="13" fill="#b8c7df"><text x="109" y="101">AF7</text><text x="183" y="101">AF8</text><text x="59" y="231">TP9</text><text x="213" y="231">TP10</text></g>
+  <path d="M92 205v68q0 12 12 12h135M226 205v61q0 10 10 10h9" stroke="#718db3" stroke-width="2" stroke-dasharray="4 5"/>
+  <rect x="66" y="314" width="191" height="30" rx="15" fill="#232e3e"/>
+  <text x="161" y="334" text-anchor="middle" fill="#b8c7df" font-family="sans-serif" font-size="12" letter-spacing="1">4-CHANNEL EEG</text>
+</svg>

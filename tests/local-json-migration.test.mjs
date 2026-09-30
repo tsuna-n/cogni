@@ -10,7 +10,10 @@ test("local JSON import preserves existing rows and can resume", async () => {
   const previous = process.env.COGNILOAD_DATA_DIR;
   process.env.COGNILOAD_DATA_DIR = directory;
   try {
-    const account = { email: "researcher@example.org", name: "Researcher", passwordHash: "scrypt:test", createdAt: "2026-01-01T00:00:00.000Z", loginCount: 2, lastLoginAt: null };
+    const account = { email: "researcher@example.org", name: "Researcher", passwordHash: "scrypt:test", createdAt: "2026-01-01T00:00:00.000Z", loginCount: 2, lastLoginAt: null, role: "admin" };
+    account.profile = { participantId: "P001", age: 68, notes: "Follow-up" };
+    account.profileUpdatedAt = "2026-01-02T00:00:00.000Z";
+    account.profileUpdatedBy = "admin@example.org";
     const record = { recordId: "record-1", participantId: "p-1", uploadedBy: account.email, uploadedAt: "2026-01-01T00:00:00.000Z", summary: { startedMs: 100, protocolVersion: "pilot_1" } };
     const study = { baselineSeconds: 40, postTaskSeconds: 20, maxTaskSeconds: 300, defaultTaskSeconds: 90, protocolVersion: "pilot_1" };
     await Promise.all([
@@ -48,6 +51,10 @@ test("local JSON import preserves existing rows and can resume", async () => {
     assert.deepEqual(database.settings.get("study"), study);
     assert.equal(database.records.get("record-1")[3], record.uploadedAt);
     assert.equal(database.users.get(account.email)[4], 2);
+    assert.equal(database.users.get(account.email)[6], "admin");
+    assert.deepEqual(JSON.parse(database.users.get(account.email)[7]), account.profile);
+    assert.equal(database.users.get(account.email)[8], account.profileUpdatedAt);
+    assert.equal(database.users.get(account.email)[9], account.profileUpdatedBy);
   } finally {
     if (previous === undefined) delete process.env.COGNILOAD_DATA_DIR;
     else process.env.COGNILOAD_DATA_DIR = previous;

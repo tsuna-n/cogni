@@ -122,7 +122,7 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
     if (!enabled) { setSelected(""); setParticipants([]); setRecords([]); setStudyDraft(null); }
   }, [enabled]);
 
-  const sessions = records.map((record) => ({ id: record.recordId, ...record.summary, summary: record.summary }));
+  const sessions = records.map((record) => ({ id: record.recordId, ...record.summary, summary: record.summary, uploadedBy: record.uploadedBy }));
   return <div className="admin-panel">
     <div className="card study-card">
       <div className="study-heading"><div><span className="study-kicker">ADMIN · STUDY SETTINGS</span><h2>{locale === "th" ? "ตั้งค่ารอบทดลอง" : "Study settings"}</h2><p className="muted">{locale === "th" ? "ค่าที่บันทึกจะใช้กับรอบทดลองใหม่ รอบที่กำลังบันทึกยังใช้ค่าเดิม" : "Saved values apply to new sessions. Active sessions keep their existing values."}</p></div><span className="pill">{studySource === "saved" ? (locale === "th" ? "ค่าจากหน้าเว็บ" : "Saved in app") : (locale === "th" ? "ค่าเซิร์ฟเวอร์" : "Server defaults")}</span></div>

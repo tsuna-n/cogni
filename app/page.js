@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import ResearchSession from "@/app/components/ResearchSession";
 import ResearchDashboard from "@/app/components/ResearchDashboard";
+import DashboardUsers from "@/app/components/DashboardUsers";
 import AdminPanel from "@/app/components/AdminPanel";
+import DashboardIcon from "@/app/components/DashboardIcon";
+import WorkspacePageHeading from "@/app/components/WorkspacePageHeading";
 import {
   LINE_WINDOW_SAMPLES,
   summarizeEegWindow,
@@ -33,12 +36,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Home() {
   const [locale, setLocale] = useState("th");
+  const [activeSection, setActiveSection] = useState("dashboard");
+  const [sequenceActive, setSequenceActive] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavigation, setMobileNavigation] = useState(false);
+  const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardView, setDashboardView] = useState("overview");
   const localeRef = useRef("th");
   const localizationRef = useRef(null);
   const [authed, setAuthed] = useState(null);
   const [account, setAccount] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
+  const [accountRole, setAccountRole] = useState("user");
   const [isAdmin, setIsAdmin] = useState(false);
+  const canManageUserData = authed === true && (accountRole === "admin" || accountRole === "researcher");
   const [mode, setMode] = useState("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -52,6 +64,19 @@ export default function Home() {
   const [configError, setConfigError] = useState("");
   const alertUser = (message) =>
     window.alert(localizeText(message, localeRef.current));
+
+  useEffect(() => { setDashboardView("overview"); }, [accountEmail]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 850px)");
+    const update = () => {
+      setMobileNavigation(media.matches);
+      setSidebarOpen(false);
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     localizationRef.current = startLocalization(() => localeRef.current);
@@ -191,12 +216,16 @@ export default function Home() {
       setPassword("");
       setConfirm("");
       setFullName("");
-      window.__enterApp?.(
+      const entered = await window.__enterApp?.(
         data.user.email,
         data.user.name,
         true,
         data.user.role,
       );
+      if (!entered) {
+        setAuthError(true);
+        setAuthMessage("ยืนยันเซสชันไม่ได้ กรุณาเข้าสู่ระบบอีกครั้ง / Cannot confirm the session. Please sign in again.");
+      }
     } catch {
       setAuthError(true);
       setAuthMessage("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ / Cannot reach the server");
@@ -213,21 +242,21 @@ export default function Home() {
     let raf = 0;
     const layers = [
       {
-        color: "rgba(51,214,255,.5)",
+        color: "rgba(52,138,250,.4)",
         amp: 46,
         speed: 0.9,
         freq: 1.6,
         width: 2,
       },
       {
-        color: "rgba(155,123,255,.35)",
+        color: "rgba(161,122,229,.3)",
         amp: 30,
         speed: 1.4,
         freq: 2.4,
         width: 1.5,
       },
       {
-        color: "rgba(79,224,161,.22)",
+        color: "rgba(40,187,150,.2)",
         amp: 22,
         speed: 0.6,
         freq: 3.2,
@@ -270,7 +299,7 @@ export default function Home() {
       if (!c) return;
       const ctx = c.getContext("2d");
       ctx.clearRect(0, 0, c.width, c.height);
-      ctx.strokeStyle = "#33d6ff";
+      ctx.strokeStyle = "#348afa";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let x = 0; x < c.width; x++) {
@@ -392,6 +421,12 @@ export default function Home() {
       );
     }
     function startGame(n) {
+      if (window.__studySequence && window.__studyPhase !== "task") {
+        alertUser(
+          "ใช้ปุ่ม Next ตามลำดับเกมหลังบันทึก EEG ครบ / Use Next after the EEG recording finishes.",
+        );
+        return;
+      }
       if (window.__studyPhase && window.__studyPhase !== "task") {
         alertUser(
           "เริ่มเกมได้เฉพาะช่วง Task ของรอบทดลอง / Start a task during the Task phase",
@@ -456,7 +491,7 @@ export default function Home() {
       $("gtitle").textContent = "Echo Sequence / ลำดับสะท้อน";
       let box = $("gamebox");
       seq = Array.from({ length: 4 }, () => 1 + Math.floor(Math.random() * 6));
-      box.innerHTML = `<div style="text-align:center"><p>Remember / จำลำดับ</p><div style="font-size:45px;letter-spacing:20px">${seq.join(" ")}</div></div>`;
+      box.innerHTML = `<div style="text-align:center"><p>Remember / จำลำดับ</p><div class="game-sequence">${seq.join(" ")}</div></div>`;
       emitTaskMarker(`game_2_trial_${currentTrial}_stimulus_${seq.join("")}`);
       setTimeout(() => {
         if (currentFreeGame !== 2 || runId !== gameRunId) return;
@@ -497,7 +532,7 @@ export default function Home() {
       let a = arr.slice(0, 5),
         b = a.slice();
       if (change) b[2] = "⬟";
-      box.innerHTML = `<div style="text-align:center"><p>Did the pattern change? / รูปแบบเปลี่ยนหรือไม่?</p><div style="font-size:40px">${a.join(" ")}</div><div style="font-size:40px;margin:15px">${b.join(" ")}</div><button onclick="answer3(${change},true)">Changed</button> <button class="secondary" onclick="answer3(${change},false)">Same</button></div>`;
+      box.innerHTML = `<div style="text-align:center"><p>Did the pattern change? / รูปแบบเปลี่ยนหรือไม่?</p><div class="game-pattern">${a.join(" ")}</div><div class="game-pattern">${b.join(" ")}</div><button onclick="answer3(${change},true)">Changed</button> <button class="secondary" onclick="answer3(${change},false)">Same</button></div>`;
       timerStart = performance.now();
       acceptingResponse = true;
       emitTaskMarker(
@@ -548,7 +583,7 @@ export default function Home() {
       const finishTaskBtn = $("finishTaskBtn");
       if (finishTaskBtn) {
         finishTaskBtn.textContent = `Finish task · record EEG for ${event.detail.restSeconds} more seconds / จบกิจกรรม · เก็บ EEG ต่อ ${event.detail.restSeconds} วินาที`;
-        finishTaskBtn.hidden = false;
+        finishTaskBtn.hidden = Boolean(event.detail.sequenceId);
       }
     };
     const onFinishTaskClick = () =>
@@ -557,7 +592,30 @@ export default function Home() {
     finishTaskBtn?.addEventListener("click", onFinishTaskClick);
     window.addEventListener("research-task-ended", onResearchTaskEnded);
     window.addEventListener("research-task-start", onResearchTaskStart);
-    const onResearchSessionFinished = () => showSection("journey");
+    const onResearchSequenceState = (event) => {
+      setSequenceActive(Boolean(event.detail));
+      if (
+        event.detail?.status === "recording" &&
+        window.__studyPhase === "baseline"
+      ) {
+        $("gtitle").textContent =
+          `Game ${event.detail.gameId} / เกม ${event.detail.gameId}`;
+        $("gamebox").textContent =
+          "กำลังบันทึก EEG ช่วงพักนิ่ง เกมจะเริ่มเมื่อครบ Baseline / Recording baseline EEG. The game starts when baseline is complete.";
+      }
+    };
+    window.addEventListener("research-sequence-state", onResearchSequenceState);
+    const onResearchSessionFinished = (event) => {
+      if (event.detail?.sequenceId) {
+        $("gamebox").textContent =
+          event.detail.status === "complete"
+            ? event.detail.gameId === 3
+              ? "ทำครบทั้ง 3 เกมแล้ว ดูผลหรือส่งออก EEG แยกแต่ละเกมได้ / All 3 games are complete. Review results or export each game's EEG."
+              : "บันทึก EEG เกมนี้ครบแล้ว ใช้ปุ่ม Next ด้านบนเพื่อไปต่อ / EEG recording saved. Use Next above to continue."
+            : "รอบนี้ไม่สมบูรณ์ เก็บข้อมูลบางส่วนแล้ว กรุณาลองเกมเดิมอีกครั้ง / Partial recording saved. Retry the same game.";
+      }
+      showSection(event.detail?.sequenceId ? "games" : "journey");
+    };
     window.addEventListener(
       "research-session-finished",
       onResearchSessionFinished,
@@ -601,7 +659,9 @@ export default function Home() {
             initApp(data.user.email, data.user.name, false);
             setAccount(String(data.user.name || data.user.email));
             setAccountEmail(data.user.email);
+            setAccountRole(data.user.role);
             setIsAdmin(data.user.role === "admin");
+            showSection("dashboard");
             setAuthed(true);
             return;
           }
@@ -629,16 +689,27 @@ export default function Home() {
       showSection("journey");
       setAccount("");
       setAccountEmail("");
+      setAccountRole("user");
       setIsAdmin(false);
       setAuthed(false);
     }
-    window.__enterApp = (emailAddress, displayName, fresh, role) => {
-      initApp(emailAddress, displayName, fresh);
-      showSection("journey");
-      setAccount(String(displayName || emailAddress || ""));
-      setAccountEmail(emailAddress);
-      setIsAdmin(role === "admin");
-      setAuthed(true);
+    window.__enterApp = async (_emailAddress, _displayName, fresh) => {
+      try {
+        const response = await fetch("/api/auth/me", { cache: "no-store" });
+        if (!response.ok) return false;
+        const { user } = await response.json();
+        if (!user?.email) return false;
+        initApp(user.email, user.name, fresh);
+        showSection("dashboard");
+        setAccount(String(user.name || user.email));
+        setAccountEmail(user.email);
+        setAccountRole(user.role);
+        setIsAdmin(user.role === "admin");
+        setAuthed(true);
+        return true;
+      } catch {
+        return false;
+      }
     };
     restoreSession();
     function saveJourney() {
@@ -1130,7 +1201,7 @@ export default function Home() {
       );
       if (!hist.length) {
         box.innerHTML =
-          '<p class="muted">ยังไม่มีประวัติการประเมิน / No assessment history</p>';
+          '<div class="history-empty"><span class="history-empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><h3>ยังไม่มีประวัติการประเมิน / No assessment history</h3><p class="muted">ผลแบบประเมินที่บันทึกไว้จะแสดงที่นี่ / Saved assessment results will appear here.</p></div>';
         return;
       }
       box.innerHTML = `<div style="overflow:auto"><table><tr><th>Date / วันที่</th><th>Participant</th><th>MMSE</th><th>Level / ระดับ</th><th>Game 1</th><th>Game 2</th><th>Game 3</th></tr>${hist
@@ -1184,7 +1255,7 @@ export default function Home() {
           (deviceName ? ": " + deviceName : "") +
           " / เชื่อมต่อแล้ว"
         : "● Not connected / ยังไม่เชื่อมต่อ";
-      s.style.background = on ? "#123c2b" : "#0a3140";
+      s.style.background = on ? "var(--green-soft)" : "var(--surface-raised)";
       if (!on) {
         latest = [null, null, null, null];
         traces = [[], [], [], []];
@@ -1238,9 +1309,9 @@ export default function Home() {
         w = c.width,
         h = c.height;
       x.clearRect(0, 0, w, h);
-      x.fillStyle = "#081522";
+      x.fillStyle = "#101318";
       x.fillRect(0, 0, w, h);
-      x.strokeStyle = "#17314a";
+      x.strokeStyle = "#303742";
       x.lineWidth = 1;
       for (let i = 1; i < 4; i++) {
         x.beginPath();
@@ -1248,7 +1319,7 @@ export default function Home() {
         x.lineTo(w, (i * h) / 4);
         x.stroke();
       }
-      const cols = ["#33d6ff", "#9b7bff", "#4fe0a1", "#ffc857"];
+      const cols = ["#348afa", "#9472d6", "#24ae8b", "#dca02f"];
       plotBuffers.forEach((buf, ch) => {
         if (buf.length < 2) return;
         const mean = buf.reduce((a, b) => a + b, 0) / buf.length;
@@ -1269,7 +1340,7 @@ export default function Home() {
         });
         x.stroke();
         x.fillStyle = cols[ch];
-        x.font = "11px system-ui";
+        x.font = "14px system-ui";
         x.fillText(`±${Math.round(scale)} µV`, 7, ch * rowHeight + 12);
       });
     }
@@ -1293,7 +1364,8 @@ export default function Home() {
           ? "✓ Chrome + localhost พร้อมใช้งาน"
           : "✓ localhost พร้อมใช้งาน"
         : "⚠ เปิดผิดวิธี";
-      $("chromeStatus").style.background = secureOK ? "#123c2b" : "#4a1d22";
+      $("chromeStatus").style.background = secureOK ? "var(--green-soft)" : "var(--red-soft)";
+      $("chromeStatus").style.color = secureOK ? "var(--green)" : "var(--red)";
     }
     if (
       secureOK &&
@@ -1303,7 +1375,8 @@ export default function Home() {
       $("chromeStatus").textContent = linuxDesktop
         ? "⚠ ต้องเปิด Web Bluetooth ใน Chrome Linux"
         : "⚠ Web Bluetooth ถูกปิด/ไม่รองรับ";
-      $("chromeStatus").style.background = "#4a1d22";
+      $("chromeStatus").style.background = "var(--red-soft)";
+      $("chromeStatus").style.color = "var(--red)";
     }
 
     let museModulePromise = null;
@@ -1314,7 +1387,7 @@ export default function Home() {
       const s = getEl("museStatus");
       if (s) {
         s.textContent = message;
-        s.style.color = isError ? "#ff8b8b" : "#7ee7d8";
+        s.style.color = isError ? "var(--red)" : "var(--green)";
       }
       museMessage(message, isError);
     }
@@ -1758,14 +1831,18 @@ export default function Home() {
         window.dispatchEvent(new Event("research-task-screen-left"));
         return;
       }
+      setActiveSection(id);
+      setSidebarOpen(false);
       document
         .querySelectorAll("main > section")
         .forEach((s) => s.classList.toggle("active", s.id === id));
       const nav = document.getElementById("mainNav");
       if (nav)
-        nav
-          .querySelectorAll("[data-sec]")
-          .forEach((b) => b.classList.toggle("active", b.dataset.sec === id));
+        nav.querySelectorAll("[data-sec]").forEach((b) => {
+          b.classList.toggle("active", b.dataset.sec === id);
+          if (b.dataset.sec === id) b.setAttribute("aria-current", "page");
+          else b.removeAttribute("aria-current");
+        });
       if (id === "dashboard")
         window.dispatchEvent(new Event("research-dashboard-opened"));
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1843,6 +1920,10 @@ export default function Home() {
         "research-session-finished",
         onResearchSessionFinished,
       );
+      window.removeEventListener(
+        "research-sequence-state",
+        onResearchSequenceState,
+      );
       finishTaskBtn?.removeEventListener("click", onFinishTaskClick);
       if (installBtn) installBtn.removeEventListener("click", onInstallClick);
     };
@@ -1863,7 +1944,7 @@ export default function Home() {
             display: "grid",
             placeItems: "center",
             padding: "25px",
-            background: "linear-gradient(135deg,#050b14,#0b1e35)",
+            background: "var(--bg)",
           }}
         >
           <div
@@ -1890,188 +1971,47 @@ export default function Home() {
           height="420"
           aria-hidden="true"
         ></canvas>
-        <div className="auth-inner">
-          <div className="auth-logo">🧠</div>
-          <div className="brand" style={{ fontSize: "26px" }}>
-            CogniLoad<span>-XAI</span>
-          </div>
-          <button
-            type="button"
-            className="secondary"
-            lang={locale === "th" ? "en" : "th"}
-            aria-label={
-              locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"
-            }
-            onClick={() => setLocale(locale === "th" ? "en" : "th")}
-          >
-            {locale === "th" ? "English" : "ไทย"}
-          </button>
-          <p className="muted" style={{ margin: "4px 0 0" }}>
-            Cognitive Assessment System / ระบบประเมินการรู้คิด
-          </p>
-          <div className="auth-card">
-            <h2 id="authTitle">
-              {mode === "login"
-                ? "Sign in / เข้าสู่ระบบ"
-                : "Register / สมัครสมาชิก"}
-            </h2>
-            <p className="muted">Research workspace / ระบบสำหรับผู้วิจัย</p>
-            <div className="auth-tabs">
-              <button
-                type="button"
-                className={"auth-tab" + (mode === "login" ? " active" : "")}
-                onClick={() => switchMode("login")}
-              >
-                Sign in
-              </button>
-              {appConfig?.registrationEnabled && (
-                <button
-                  type="button"
-                  className={
-                    "auth-tab" + (mode === "register" ? " active" : "")
-                  }
-                  onClick={() => switchMode("register")}
-                >
-                  Register
-                </button>
-              )}
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitAuth();
-              }}
-            >
-              {mode === "register" && (
-                <label>
-                  Full name / ชื่อ-นามสกุล
-                  <input
-                    id="authName"
-                    type="text"
-                    autoComplete="name"
-                    maxLength={80}
-                    placeholder="สมชาย ใจดี (optional)"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </label>
-              )}
-              <label>
-                Email
-                <input
-                  id="authEmail"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label>
-                Password / รหัสผ่าน
-                <input
-                  id="authPass"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete={
-                    mode === "register" ? "new-password" : "current-password"
-                  }
-                  placeholder={
-                    mode === "register"
-                      ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร"
-                      : "Your password / รหัสผ่านของคุณ"
-                  }
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-              {mode === "register" && (
-                <label>
-                  Confirm password / ยืนยันรหัสผ่าน
-                  <input
-                    id="authPassConfirm"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    placeholder="Type the same password again / กรอกรหัสผ่านเดิมอีกครั้ง"
-                    value={confirm}
-                    onChange={(e) => setConfirm(e.target.value)}
-                  />
-                </label>
-              )}
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  flexDirection: "row",
-                  margin: "10px 0",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={showPassword}
-                  onChange={(e) => setShowPassword(e.target.checked)}
-                  style={{ width: "auto", margin: 0 }}
-                />
-                <span style={{ fontWeight: 400 }}>
-                  Show password / แสดงรหัสผ่าน
+        <div className="auth-layout">
+          <aside className="auth-introduction" data-no-translate>
+            <span className="auth-eyebrow">COGNILOAD · EEG RESEARCH</span>
+            <h1>
+              {locale === "th" ? "งานวิจัยสัญญาณสมอง" : "EEG research."}
+              <br />
+              <span>
+                {locale === "th"
+                  ? "บันทึกอย่างเป็นระบบ"
+                  : "Record. Study. Discover."}
+              </span>
+            </h1>
+            <p>
+              {locale === "th"
+                ? "พื้นที่สำหรับการทดลอง EEG ที่เชื่อมข้อมูลสัญญาณสมอง ภารกิจการรู้คิด และทุกการค้นพบของคุณเข้าด้วยกัน"
+                : "A thoughtful space to connect EEG recordings, cognitive tasks, and your next discovery."}
+            </p>
+            <div className="auth-eeg-visual" aria-hidden="true" />
+            <div className="auth-feature-list">
+              {[
+                ["pulse", "สัญญาณจริงจาก Muse", "Real Muse recordings"],
+                ["game", "ภารกิจการรู้คิด", "Cognitive tasks"],
+                ["file", "สรุปและส่งออกข้อมูล", "Summaries & export"],
+              ].map(([icon, th, en]) => (
+                <span key={icon}>
+                  <DashboardIcon name={icon} size={17} />
+                  {locale === "th" ? th : en}
                 </span>
-              </label>
-              <div className="controls">
-                <button type="submit" disabled={busy} style={{ width: "100%" }}>
-                  {busy
-                    ? "Please wait… / กำลังดำเนินการ"
-                    : mode === "login"
-                      ? "Sign in / เข้าสู่ระบบ"
-                      : "Create account / สมัครสมาชิก"}
-                </button>
-              </div>
-            </form>
-            <div
-              id="authMsg"
-              className="muted"
-              style={authError ? { color: "#ff8b8b" } : undefined}
-              aria-live="polite"
-            >
-              {authMessage ||
-                configError ||
-                (mode === "register"
-                  ? "สมัครสมาชิกเพื่อเริ่มการทดลอง / Create an account to start the study."
-                  : appConfig?.registrationEnabled
-                    ? "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one."
-                    : "ติดต่อผู้ดูแลเพื่อขอบัญชี / Contact the administrator for an account.")}
+              ))}
             </div>
-          </div>
-          <p className="auth-foot">
-            📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG
-            ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
-          </p>
-        </div>
-      </div>
-
-      {/* ---------- App shell ---------- */}
-      <div
-        id="appShell"
-        style={{ display: authed === true ? "block" : "none" }}
-      >
-        <header>
-          <div className="brand">
-            CogniLoad<span>-XAI</span>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            <div className="badge" id="studyLiveBadge">
-              Muse EEG Research Workspace
+          </aside>
+          <div className="auth-inner">
+            <div className="auth-logo">
+              <DashboardIcon name="brain" size={31} />
+            </div>
+            <div className="brand" style={{ fontSize: "26px" }}>
+              CogniLoad<span>-XAI</span>
             </div>
             <button
               type="button"
               className="secondary"
-              id="langBtn"
               lang={locale === "th" ? "en" : "th"}
               aria-label={
                 locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"
@@ -2080,50 +2020,410 @@ export default function Home() {
             >
               {locale === "th" ? "English" : "ไทย"}
             </button>
-            {account && <div className="badge">👤 {account}</div>}
-            <button className="secondary" onClick={() => call("logoutUser")}>
-              Logout / ออกจากระบบ
+            <p className="muted" style={{ margin: "4px 0 0" }}>
+              Cognitive Assessment System / ระบบประเมินการรู้คิด
+            </p>
+            <div className="auth-card">
+              <h2 id="authTitle">
+                {mode === "login"
+                  ? "Sign in / เข้าสู่ระบบ"
+                  : "Register / สมัครสมาชิก"}
+              </h2>
+              <p className="muted">Research workspace / ระบบสำหรับผู้วิจัย</p>
+              <div className="auth-tabs">
+                <button
+                  type="button"
+                  className={"auth-tab" + (mode === "login" ? " active" : "")}
+                  onClick={() => switchMode("login")}
+                >
+                  Sign in
+                </button>
+                {appConfig?.registrationEnabled && (
+                  <button
+                    type="button"
+                    className={
+                      "auth-tab" + (mode === "register" ? " active" : "")
+                    }
+                    onClick={() => switchMode("register")}
+                  >
+                    Register
+                  </button>
+                )}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitAuth();
+                }}
+              >
+                {mode === "register" && (
+                  <label>
+                    Full name / ชื่อ-นามสกุล
+                    <input
+                      id="authName"
+                      type="text"
+                      autoComplete="name"
+                      maxLength={80}
+                      placeholder="สมชาย ใจดี (optional)"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </label>
+                )}
+                <label>
+                  Email
+                  <input
+                    id="authEmail"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Password / รหัสผ่าน
+                  <input
+                    id="authPass"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete={
+                      mode === "register" ? "new-password" : "current-password"
+                    }
+                    placeholder={
+                      mode === "register"
+                        ? "At least 8 characters / อย่างน้อย 8 ตัวอักษร"
+                        : "Your password / รหัสผ่านของคุณ"
+                    }
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                </label>
+                {mode === "register" && (
+                  <label>
+                    Confirm password / ยืนยันรหัสผ่าน
+                    <input
+                      id="authPassConfirm"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="Type the same password again / กรอกรหัสผ่านเดิมอีกครั้ง"
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                    />
+                  </label>
+                )}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexDirection: "row",
+                    margin: "10px 0",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                    style={{ width: "auto", margin: 0 }}
+                  />
+                  <span style={{ fontWeight: 400 }}>
+                    Show password / แสดงรหัสผ่าน
+                  </span>
+                </label>
+                <div className="controls">
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    style={{ width: "100%" }}
+                  >
+                    {busy
+                      ? "Please wait… / กำลังดำเนินการ"
+                      : mode === "login"
+                        ? "Sign in / เข้าสู่ระบบ"
+                        : "Create account / สมัครสมาชิก"}
+                  </button>
+                </div>
+              </form>
+              <div
+                id="authMsg"
+                className="muted"
+                style={authError ? { color: "var(--red)" } : undefined}
+                aria-live="polite"
+              >
+                {authMessage ||
+                  configError ||
+                  (mode === "register"
+                    ? "สมัครบัญชีผู้ใช้ทั่วไป หากต้องการสิทธิ์นักวิจัย โปรดติดต่อผู้ดูแล / Register a regular user account. Contact an administrator for researcher access."
+                    : appConfig?.registrationEnabled
+                      ? "ยังไม่มีบัญชี? กด Register เพื่อสมัคร / No account yet? Use Register to create one."
+                      : "ติดต่อผู้ดูแลเพื่อขอบัญชี / Contact the administrator for an account.")}
+              </div>
+            </div>
+            <p className="auth-foot">
+              📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG
+              ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ---------- App shell ---------- */}
+      <div
+        id="appShell"
+        className={`workspace-shell${activeSection === "dashboard" ? " dashboard-shell" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+        style={{ display: authed === true ? "block" : "none" }}
+      >
+        <header className="workspace-topbar">
+          <div className="workspace-topbar-start" data-no-translate>
+            <button
+              className="workspace-menu-button"
+              aria-label={
+                locale === "th" ? "เปิดหรือปิดเมนู" : "Toggle navigation"
+              }
+              aria-expanded={mobileNavigation ? sidebarOpen : !sidebarCollapsed}
+              aria-controls="mainNav"
+              onClick={() =>
+                mobileNavigation
+                  ? setSidebarOpen(!sidebarOpen)
+                  : setSidebarCollapsed(!sidebarCollapsed)
+              }
+            >
+              <DashboardIcon name="menu" size={19} />
+            </button>
+            <label className="workspace-search">
+              <DashboardIcon name="search" size={17} />
+              <input
+                aria-label={
+                  locale === "th" ? "ค้นหาข้อมูลแดชบอร์ด" : "Search dashboard"
+                }
+                placeholder={
+                  canManageUserData
+                    ? locale === "th" ? "ค้นหาชื่อ อีเมล หรือรหัสผู้เข้าร่วม…" : "Search name, email, or participant ID…"
+                    : locale === "th" ? "ค้นหาผู้เข้าร่วม รหัสรอบทดลอง หรือกลุ่ม…" : "Search participant, session ID, or group…"
+                }
+                value={dashboardSearch}
+                onChange={(event) => {
+                  setDashboardSearch(event.target.value);
+                  if (activeSection !== "dashboard")
+                    call("showSection", "dashboard");
+                }}
+              />
+              {dashboardSearch && (
+                <button
+                  aria-label={locale === "th" ? "ล้างการค้นหา" : "Clear search"}
+                  onClick={() => setDashboardSearch("")}
+                >
+                  ×
+                </button>
+              )}
+            </label>
+          </div>
+          <div className="workspace-topbar-end" data-no-translate>
+            <div className="workspace-live" id="studyLiveBadge">
+              <i /> Muse EEG Research
+            </div>
+            <button
+              type="button"
+              className="workspace-language"
+              id="langBtn"
+              lang={locale === "th" ? "en" : "th"}
+              aria-label={
+                locale === "th" ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"
+              }
+              onClick={() => setLocale(locale === "th" ? "en" : "th")}
+            >
+              {locale === "th" ? "EN" : "ไทย"}
+            </button>
+            <button
+              className="workspace-refresh"
+              aria-label={
+                locale === "th" ? "อัปเดตข้อมูลแดชบอร์ด" : "Refresh dashboard"
+              }
+              onClick={() =>
+                window.dispatchEvent(new Event("research-dashboard-opened"))
+              }
+            >
+              <DashboardIcon name="refresh" size={18} />
+            </button>
+            <div className="workspace-account">
+              <span className="workspace-account-avatar">
+                {(account || "R").slice(0, 1).toUpperCase()}
+              </span>
+              <span>
+                <strong>{account}</strong>
+                <small>
+                  {locale === "th"
+                    ? isAdmin
+                      ? "ผู้ดูแลระบบ"
+                      : accountRole === "researcher"
+                        ? "นักวิจัย"
+                        : "ผู้ใช้ทั่วไป"
+                    : isAdmin
+                      ? "Administrator"
+                      : accountRole === "researcher"
+                        ? "Researcher"
+                        : "User"}
+                </small>
+              </span>
+            </div>
+            <button
+              className="workspace-logout"
+              aria-label={locale === "th" ? "ออกจากระบบ" : "Log out"}
+              title={locale === "th" ? "ออกจากระบบ" : "Log out"}
+              onClick={() => call("logoutUser")}
+            >
+              <DashboardIcon name="logout" size={17} />
             </button>
           </div>
         </header>
-        <div className="wrap">
-          <nav className="mainnav" id="mainNav">
+        <div className="wrap workspace-wrap">
+          {sidebarOpen && (
+            <button
+              className="workspace-sidebar-backdrop"
+              aria-label={locale === "th" ? "ปิดเมนู" : "Close navigation"}
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+          <nav
+            className={`mainnav workspace-sidebar${sidebarOpen ? " is-open" : ""}`}
+            id="mainNav"
+            aria-label={locale === "th" ? "เมนูหลัก" : "Main navigation"}
+            data-no-translate
+          >
+            <div className="workspace-brand">
+              <span className="workspace-brand-mark">
+                <DashboardIcon name="brain" size={28} />
+              </span>
+              <div>
+                <strong>
+                  CogniLoad<span>-XAI</span>
+                </strong>
+                <small>EEG RESEARCH PLATFORM</small>
+              </div>
+            </div>
+            <div className="workspace-nav-group">
+              {locale === "th" ? "พื้นที่การวิจัย" : "WORKSPACE"}
+            </div>
             {[
-              ["journey", "🔬 Experiment / การทดลอง"],
-              ["dashboard", "📊 Dashboard / แดชบอร์ด"],
-              ["games", "🎮 Tasks / ภารกิจ"],
-              ["history", "🕘 Assessment history / ประวัติเดิม"],
-              ...(isAdmin ? [["admin", "🔐 Admin / ผู้ดูแล"]] : []),
-            ].map(([sec, label]) => (
+              ["dashboard", "grid", "แดชบอร์ด", "Dashboard"],
+              ["journey", "flask", "ห้องทดลอง EEG", "EEG experiment"],
+              ["games", "game", "ภารกิจการรู้คิด", "Cognitive tasks"],
+              ["history", "clock", "ประวัติแบบประเมิน", "Assessment history"],
+            ].map(([sec, icon, th, en]) => (
               <button
                 key={sec}
                 data-sec={sec}
-                className={sec === "journey" ? "active" : ""}
+                className={activeSection === sec ? "active" : ""}
+                aria-current={activeSection === sec ? "page" : undefined}
                 onClick={() => call("showSection", sec)}
               >
-                {label}
+                <DashboardIcon name={icon} size={19} />
+                <span>{locale === "th" ? th : en}</span>
+                <DashboardIcon name="chevron" size={12} />
               </button>
             ))}
+            <div className="workspace-nav-group">
+              {locale === "th" ? "จัดการข้อมูล" : "DATA MANAGEMENT"}
+            </div>
+            <button
+              onClick={() => {
+                call("showSection", "dashboard");
+                if (canManageUserData) setDashboardView("summaries");
+                setTimeout(
+                  () =>
+                    document
+                      .querySelector("#dashboard .research-history")
+                      ?.scrollIntoView({ behavior: "smooth" }),
+                  80,
+                );
+              }}
+            >
+              <DashboardIcon name="file" size={19} />
+              <span>
+                {locale === "th"
+                  ? "ผลสรุปและเปรียบเทียบ"
+                  : "Summaries & compare"}
+              </span>
+              <DashboardIcon name="chevron" size={12} />
+            </button>
+            <button
+              onClick={() => {
+                call("showSection", "dashboard");
+                if (canManageUserData) setDashboardView("summaries");
+                setTimeout(
+                  () =>
+                    document
+                      .querySelector("#dashboard .research-history")
+                      ?.scrollIntoView({ behavior: "smooth" }),
+                  80,
+                );
+              }}
+            >
+              <DashboardIcon name="download" size={19} />
+              <span>{locale === "th" ? "ส่งออกข้อมูล CSV" : "Export CSV"}</span>
+              <DashboardIcon name="chevron" size={12} />
+            </button>
+            {isAdmin && (
+              <button
+                data-sec="admin"
+                className={activeSection === "admin" ? "active" : ""}
+                aria-current={activeSection === "admin" ? "page" : undefined}
+                onClick={() => call("showSection", "admin")}
+              >
+                <DashboardIcon name="shield" size={19} />
+                <span>
+                  {locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}
+                </span>
+                <DashboardIcon name="chevron" size={12} />
+              </button>
+            )}
+            <div className="workspace-sidebar-bottom">
+              <div className="workspace-eeg-mark" aria-hidden="true">
+                <DashboardIcon name="pulse" size={35} />
+                <span>EEG RESEARCH</span>
+              </div>
+              <strong>
+                {locale === "th"
+                  ? "พื้นที่วิจัยสัญญาณสมอง"
+                  : "EEG research workspace"}
+              </strong>
+              <p>
+                {locale === "th"
+                  ? "บันทึกสัญญาณ 4 ช่อง พร้อมเวลาของทุกภารกิจ"
+                  : "Four-channel recordings with task event timing."}
+              </p>
+              <span>
+                <i /> MUSE 2 / MUSE S
+              </span>
+            </div>
+            <div className="workspace-sidebar-footer">
+              <span>CogniLoad-XAI</span>
+              <small>RESEARCH WORKSPACE</small>
+            </div>
           </nav>
           <main>
             {/* ---------- Journey ---------- */}
-            <section id="journey" className="active">
-              <div className="hero">
-                <div>
-                  <span className="study-kicker">COGNILOAD · MUSE EEG</span>
-                  <h1>ห้องทดลอง EEG</h1>
-                  <p>
-                    ตั้งค่ารอบทดลอง เชื่อมต่อ Muse บันทึกสัญญาณจริง
-                    และส่งออกข้อมูลพร้อม marker
-                  </p>
-                </div>
-                <span className="pill">Research use · ไม่ใช่การวินิจฉัย</span>
-              </div>
+            <section
+              id="journey"
+              className={activeSection === "journey" ? "active" : ""}
+            >
+              <WorkspacePageHeading
+                locale={locale}
+                icon="flask"
+                title={locale === "th" ? "ห้องทดลอง EEG" : "EEG experiment"}
+                description={
+                  locale === "th"
+                    ? "เตรียมรอบทดลอง เชื่อมต่อ Muse และบันทึกทุกช่วงของการค้นพบ"
+                    : "Set up a session, connect Muse, and capture every phase of discovery."
+                }
+                badge="Muse 2 / Muse S"
+              />
               <ResearchSession
                 key={accountEmail || "signed-out"}
                 locale={locale}
                 enabled={authed === true}
                 accountEmail={accountEmail}
+                isAdmin={isAdmin}
                 studyConfig={appConfig?.study}
                 configError={configError}
               />
@@ -2348,7 +2648,7 @@ export default function Home() {
                 <div
                   style={{
                     marginTop: "12px",
-                    background: "#10243b",
+                    background: "var(--surface-raised)",
                     borderRadius: "10px",
                     overflow: "hidden",
                     height: "12px",
@@ -2359,7 +2659,7 @@ export default function Home() {
                     style={{
                       height: "100%",
                       width: "0%",
-                      background: "#42d9f5",
+                      background: "#348afa",
                       transition: "width .2s linear",
                     }}
                   ></div>
@@ -2377,9 +2677,9 @@ export default function Home() {
                     display: "none",
                     marginTop: "14px",
                     padding: "14px",
-                    border: "1px solid rgba(255,255,255,.12)",
+                    border: "1px solid var(--border)",
                     borderRadius: "12px",
-                    background: "rgba(8,21,34,.55)",
+                    background: "var(--surface-soft)",
                   }}
                 >
                   <div style={{ fontWeight: 700, marginBottom: "10px" }}>
@@ -2414,18 +2714,21 @@ export default function Home() {
             {/* ---------- Dashboard ---------- */}
             {isAdmin && (
               <section id="admin">
-                <div className="hero">
-                  <div>
-                    <h1>
-                      {locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}
-                    </h1>
-                    <p>
-                      {locale === "th"
-                        ? "ตั้งค่าการทดลองและดูผลสรุปผู้เข้าร่วม"
-                        : "Configure the study and review participant summaries"}
-                    </p>
-                  </div>
-                </div>
+                <WorkspacePageHeading
+                  locale={locale}
+                  icon="shield"
+                  title={locale === "th" ? "ผู้ดูแลระบบ" : "Administration"}
+                  description={
+                    locale === "th"
+                      ? "จัดการโปรโตคอลการทดลองและติดตามผลสรุปของผู้เข้าร่วม"
+                      : "Manage your study protocol and review participant summaries."
+                  }
+                  badge={
+                    locale === "th"
+                      ? "พื้นที่ผู้ดูแลระบบ"
+                      : "Administrator workspace"
+                  }
+                />
                 <AdminPanel
                   locale={locale}
                   enabled={authed === true && isAdmin}
@@ -2433,17 +2736,33 @@ export default function Home() {
               </section>
             )}
 
-            <section id="dashboard">
-              <div className="hero">
-                <div>
-                  <h1>Research Dashboard / แดชบอร์ด</h1>
-                  <p>ภาพรวมข้อมูล EEG จากรอบทดลองที่บันทึกในเบราว์เซอร์นี้</p>
-                </div>
-              </div>
+            <section
+              id="dashboard"
+              className={activeSection === "dashboard" ? "active" : ""}
+            >
+              <DashboardUsers
+                key={`${accountEmail}:${accountRole}`}
+                locale={locale}
+                enabled={canManageUserData}
+                search={dashboardSearch}
+                view={dashboardView}
+                onViewChange={setDashboardView}
+                onClearSearch={() => setDashboardSearch("")}
+              />
+              <div
+                id="dashboard-panel-personal"
+                className={`dashboard-personal${canManageUserData ? " dashboard-personal-with-tabs" : ""}`}
+                hidden={canManageUserData && dashboardView !== "personal"}
+                role={canManageUserData ? "tabpanel" : undefined}
+                aria-labelledby={canManageUserData ? "dashboard-tab-personal" : undefined}
+              >
               <ResearchDashboard
                 key={accountEmail || "signed-out"}
                 locale={locale}
                 accountEmail={accountEmail}
+                accountName={account}
+                search={dashboardSearch}
+                onClearSearch={() => setDashboardSearch("")}
               />
               <details className="study-legacy">
                 <summary>
@@ -2521,11 +2840,25 @@ export default function Home() {
                   </div>
                 </div>
               </details>
+              </div>
             </section>
 
             {/* ---------- Participant ---------- */}
             <section id="participant">
-              <h1>Participant &amp; Session</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="users"
+                title={
+                  locale === "th"
+                    ? "ผู้เข้าร่วมและรอบทดลอง"
+                    : "Participant & session"
+                }
+                description={
+                  locale === "th"
+                    ? "เตรียมข้อมูลผู้เข้าร่วมและเงื่อนไขของรอบทดลอง"
+                    : "Prepare participant details and session conditions."
+                }
+              />
               <div className="card">
                 <div className="formgrid">
                   <label>
@@ -2566,7 +2899,16 @@ export default function Home() {
 
             {/* ---------- Acquisition ---------- */}
             <section id="acquisition">
-              <h1>EEG Acquisition</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="pulse"
+                title={locale === "th" ? "นำเข้าข้อมูล EEG" : "EEG acquisition"}
+                description={
+                  locale === "th"
+                    ? "นำเข้าไฟล์ CSV หรือเปิดข้อมูลตัวอย่างเพื่อสำรวจสัญญาณ"
+                    : "Import a CSV or explore sample EEG signals."
+                }
+              />
               <div className="card">
                 <p className="muted">
                   Import EEG data for prototype analysis. CSV demo parsing is
@@ -2592,34 +2934,53 @@ export default function Home() {
 
             {/* ---------- Preprocess ---------- */}
             <section id="preprocess">
-              <h1>EEG Preprocessing</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="flask"
+                title={
+                  locale === "th" ? "เตรียมสัญญาณ EEG" : "EEG preprocessing"
+                }
+                description={
+                  locale === "th"
+                    ? "สำรวจขั้นตอนการกรองสัญญาณและตัวอย่างการควบคุมคุณภาพ"
+                    : "Explore the signal processing pipeline and sample quality metrics."
+                }
+                badge={locale === "th" ? "ข้อมูลตัวอย่าง" : "Demo data"}
+              />
               <div className="two">
                 <div className="card">
                   <h3>Pipeline</h3>
-                  <table>
-                    <tbody>
-                      <tr>
-                        <td>1</td>
-                        <td>Band-pass filter</td>
-                        <td>1–45 Hz</td>
-                      </tr>
-                      <tr>
-                        <td>2</td>
-                        <td>Notch filter</td>
-                        <td>50 Hz</td>
-                      </tr>
-                      <tr>
-                        <td>3</td>
-                        <td>Artifact handling</td>
-                        <td>Prototype threshold</td>
-                      </tr>
-                      <tr>
-                        <td>4</td>
-                        <td>Epoching</td>
-                        <td>2 s windows</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div
+                    className="workspace-table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Signal processing pipeline"
+                  >
+                    <table>
+                      <tbody>
+                        <tr>
+                          <td>1</td>
+                          <td>Band-pass filter</td>
+                          <td>1–45 Hz</td>
+                        </tr>
+                        <tr>
+                          <td>2</td>
+                          <td>Notch filter</td>
+                          <td>50 Hz</td>
+                        </tr>
+                        <tr>
+                          <td>3</td>
+                          <td>Artifact handling</td>
+                          <td>Prototype threshold</td>
+                        </tr>
+                        <tr>
+                          <td>4</td>
+                          <td>Epoching</td>
+                          <td>2 s windows</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                   <button
                     onClick={() => alertUser("Demo preprocessing completed.")}
                   >
@@ -2642,18 +3003,39 @@ export default function Home() {
 
             {/* ---------- Features ---------- */}
             <section id="features">
-              <h1>EEG Feature Extraction</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="pulse"
+                title={
+                  locale === "th"
+                    ? "คุณลักษณะสัญญาณ EEG"
+                    : "EEG feature extraction"
+                }
+                description={
+                  locale === "th"
+                    ? "สำรวจตัวชี้วัดของสัญญาณสำหรับการวิเคราะห์ภาระการรู้คิด"
+                    : "Explore signal features used in cognitive workload analysis."
+                }
+                badge={locale === "th" ? "ข้อมูลตัวอย่าง" : "Demo data"}
+              />
               <div className="card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Feature</th>
-                      <th>Demo value</th>
-                      <th>Use</th>
-                    </tr>
-                  </thead>
-                  <tbody id="featureRows"></tbody>
-                </table>
+                <div
+                  className="workspace-table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="EEG features"
+                >
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Feature</th>
+                        <th>Demo value</th>
+                        <th>Use</th>
+                      </tr>
+                    </thead>
+                    <tbody id="featureRows"></tbody>
+                  </table>
+                </div>
                 <button onClick={() => call("makeFeatures")}>
                   Extract Features
                 </button>
@@ -2662,48 +3044,67 @@ export default function Home() {
 
             {/* ---------- Models ---------- */}
             <section id="models">
-              <h1>Machine &amp; Deep Learning Comparison</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="brain"
+                title={
+                  locale === "th" ? "เปรียบเทียบโมเดล" : "Model comparison"
+                }
+                description={
+                  locale === "th"
+                    ? "ดูตัวอย่างผลเปรียบเทียบโมเดล Machine Learning และ Deep Learning"
+                    : "Review sample comparisons of machine learning and deep learning models."
+                }
+                badge={locale === "th" ? "ข้อมูลตัวอย่าง" : "Demo data"}
+              />
               <div className="card">
-                <table>
-                  <tbody>
-                    <tr>
-                      <th>Model</th>
-                      <th>Accuracy</th>
-                      <th>F1</th>
-                      <th>Status</th>
-                    </tr>
-                    <tr>
-                      <td>Random Forest</td>
-                      <td>0.86</td>
-                      <td>0.85</td>
-                      <td>Selected</td>
-                    </tr>
-                    <tr>
-                      <td>SVM</td>
-                      <td>0.83</td>
-                      <td>0.82</td>
-                      <td>Compared</td>
-                    </tr>
-                    <tr>
-                      <td>XGBoost</td>
-                      <td>0.85</td>
-                      <td>0.84</td>
-                      <td>Compared</td>
-                    </tr>
-                    <tr>
-                      <td>1D-CNN</td>
-                      <td>0.87</td>
-                      <td>0.86</td>
-                      <td>Placeholder</td>
-                    </tr>
-                    <tr>
-                      <td>LSTM</td>
-                      <td>0.84</td>
-                      <td>0.83</td>
-                      <td>Placeholder</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <div
+                  className="workspace-table-scroll"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Model comparison"
+                >
+                  <table>
+                    <tbody>
+                      <tr>
+                        <th>Model</th>
+                        <th>Accuracy</th>
+                        <th>F1</th>
+                        <th>Status</th>
+                      </tr>
+                      <tr>
+                        <td>Random Forest</td>
+                        <td>0.86</td>
+                        <td>0.85</td>
+                        <td>Selected</td>
+                      </tr>
+                      <tr>
+                        <td>SVM</td>
+                        <td>0.83</td>
+                        <td>0.82</td>
+                        <td>Compared</td>
+                      </tr>
+                      <tr>
+                        <td>XGBoost</td>
+                        <td>0.85</td>
+                        <td>0.84</td>
+                        <td>Compared</td>
+                      </tr>
+                      <tr>
+                        <td>1D-CNN</td>
+                        <td>0.87</td>
+                        <td>0.86</td>
+                        <td>Placeholder</td>
+                      </tr>
+                      <tr>
+                        <td>LSTM</td>
+                        <td>0.84</td>
+                        <td>0.83</td>
+                        <td>Placeholder</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
                 <p className="muted">
                   Values are demonstration data; replace with validated
                   cross-validation/test results from your study.
@@ -2713,7 +3114,20 @@ export default function Home() {
 
             {/* ---------- Cognitive screening ---------- */}
             <section id="cogscreen">
-              <h1>Cognitive Screening / แบบคัดกรองการรู้คิด</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="book"
+                title={
+                  locale === "th"
+                    ? "แบบคัดกรองการรู้คิด"
+                    : "Cognitive screening"
+                }
+                description={
+                  locale === "th"
+                    ? "บันทึกคะแนนจากแบบประเมินที่ได้รับอนุญาตและเชื่อมโยงกับข้อมูลวิจัย"
+                    : "Record authorized screening scores and link them with research data."
+                }
+              />
               <div className="card">
                 <p>
                   <b>
@@ -2769,10 +3183,54 @@ export default function Home() {
             </section>
 
             {/* ---------- Games ---------- */}
-            <section id="games">
-              <h1>
-                Experimental Cognitive Games / เกมประเมินการรู้คิดเชิงทดลอง
-              </h1>
+            <section
+              id="games"
+              className={`${activeSection === "games" ? "active " : ""}${sequenceActive ? "sequence-in-progress" : ""}`}
+            >
+              <WorkspacePageHeading
+                locale={locale}
+                icon="game"
+                title={locale === "th" ? "ภารกิจการรู้คิด" : "Cognitive tasks"}
+                description={
+                  locale === "th"
+                    ? "สำรวจความสนใจ ความจำ และการตอบสนองผ่านสามภารกิจการทดลอง"
+                    : "Explore attention, memory, and responses through three experimental tasks."
+                }
+                badge={
+                  locale === "th" ? "3 ภารกิจการทดลอง" : "3 experimental tasks"
+                }
+              />
+              <div id="gameSequenceControls" />
+              {!sequenceActive && (
+                <div className="card task-sequence-intro" data-no-translate>
+                  <div className="task-sequence-intro-copy">
+                    <span className="study-kicker">
+                      {locale === "th"
+                        ? "ชุดทดลองพร้อมบันทึก EEG"
+                        : "EEG RECORDING SEQUENCE"}
+                    </span>
+                    <h2>
+                      {locale === "th"
+                        ? "ทำทีละเกม แล้วไปต่อด้วย Next"
+                        : "One game at a time. Continue with Next."}
+                    </h2>
+                    <p className="muted">
+                      {locale === "th"
+                        ? "เกม 1 คี่หรือคู่ → เกม 2 ลำดับสะท้อน → เกม 3 รูปแบบเปลี่ยนแปลง แต่ละเกมบันทึกพักนิ่ง ภารกิจ และพักหลังงานแยกกัน กด Next หลังบันทึกเสร็จเพื่อเริ่มเกมถัดไป"
+                        : "Game 1 Odd or Even → Game 2 Echo Sequence → Game 3 Pattern Drift. Each game records its own baseline, task, and rest. Select Next after saving to begin the next game."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => call("showSection", "journey")}
+                  >
+                    {locale === "th"
+                      ? "ตั้งค่าชุดทดลอง · เริ่มเกม 1"
+                      : "Set up sequence · Start game 1"}
+                    <DashboardIcon name="arrow" size={16} />
+                  </button>
+                </div>
+              )}
               <p className="muted">
                 หากกำลังบันทึก EEG ระบบจะใส่ marker
                 อัตโนมัติเมื่อแสดงสิ่งเร้าและเมื่อผู้เข้าร่วมตอบแต่ละครั้ง
@@ -2784,40 +3242,66 @@ export default function Home() {
                 tests. Research validation is required before clinical
                 interpretation.
               </p>
-              <div
-                className="grid"
-                style={{ gridTemplateColumns: "repeat(3,1fr)" }}
-              >
-                <div className="card">
-                  <h3>1. Odd or Even / คี่หรือคู่</h3>
-                  <p className="muted">
-                    ตัดสินความคี่คู่ของตัวเลข บันทึกความถูกต้องและเวลาตอบสนอง
-                  </p>
-                  <button onClick={() => call("startGame", 1)}>
-                    Start / เริ่ม
-                  </button>
+              <details className="task-practice">
+                <summary data-no-translate>
+                  <DashboardIcon name="game" size={18} />
+                  {locale === "th"
+                    ? "ฝึกเกมก่อนเริ่ม · ไม่บันทึก EEG"
+                    : "Practice before starting · No EEG recording"}
+                </summary>
+                <div
+                  className="grid task-selection-grid"
+                  style={{ gridTemplateColumns: "repeat(3,1fr)" }}
+                >
+                  <div className="card">
+                    <div className="task-card-top">
+                      <span className="task-card-icon blue">
+                        <DashboardIcon name="game" size={26} />
+                      </span>
+                      <span>TASK 01</span>
+                    </div>
+                    <h3>1. Odd or Even / คี่หรือคู่</h3>
+                    <p className="muted">
+                      ตัดสินความคี่คู่ของตัวเลข บันทึกความถูกต้องและเวลาตอบสนอง
+                    </p>
+                    <button onClick={() => call("startGame", 1)}>
+                      Practice / ฝึกเกมนี้
+                    </button>
+                  </div>
+                  <div className="card">
+                    <div className="task-card-top">
+                      <span className="task-card-icon purple">
+                        <DashboardIcon name="brain" size={26} />
+                      </span>
+                      <span>TASK 02</span>
+                    </div>
+                    <h3>2. Echo Sequence</h3>
+                    <p className="muted">
+                      ลำดับสะท้อน: ทดสอบ temporal sequence memory และ delayed
+                      recognition
+                    </p>
+                    <button onClick={() => call("startGame", 2)}>
+                      Practice / ฝึกเกมนี้
+                    </button>
+                  </div>
+                  <div className="card">
+                    <div className="task-card-top">
+                      <span className="task-card-icon green">
+                        <DashboardIcon name="grid" size={26} />
+                      </span>
+                      <span>TASK 03</span>
+                    </div>
+                    <h3>3. Pattern Drift</h3>
+                    <p className="muted">
+                      รูปแบบเปลี่ยนแปลง: ทดสอบ visual change detection,
+                      attention และ processing speed
+                    </p>
+                    <button onClick={() => call("startGame", 3)}>
+                      Practice / ฝึกเกมนี้
+                    </button>
+                  </div>
                 </div>
-                <div className="card">
-                  <h3>2. Echo Sequence</h3>
-                  <p className="muted">
-                    ลำดับสะท้อน: ทดสอบ temporal sequence memory และ delayed
-                    recognition
-                  </p>
-                  <button onClick={() => call("startGame", 2)}>
-                    Start / เริ่ม
-                  </button>
-                </div>
-                <div className="card">
-                  <h3>3. Pattern Drift</h3>
-                  <p className="muted">
-                    รูปแบบเปลี่ยนแปลง: ทดสอบ visual change detection, attention
-                    และ processing speed
-                  </p>
-                  <button onClick={() => call("startGame", 3)}>
-                    Start / เริ่ม
-                  </button>
-                </div>
-              </div>
+              </details>
               <div className="two">
                 <div className="card">
                   <h3 id="gtitle">Game workspace / พื้นที่เกม</h3>
@@ -2827,7 +3311,7 @@ export default function Home() {
                       minHeight: "240px",
                       display: "grid",
                       placeItems: "center",
-                      border: "1px dashed #294963",
+                      border: "1px dashed var(--border)",
                       borderRadius: "12px",
                       padding: "20px",
                     }}
@@ -2877,7 +3361,19 @@ export default function Home() {
 
             {/* ---------- History ---------- */}
             <section id="history">
-              <h1>Assessment History / ประวัติการประเมิน</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="clock"
+                title={
+                  locale === "th" ? "ประวัติแบบประเมิน" : "Assessment history"
+                }
+                description={
+                  locale === "th"
+                    ? "ทบทวนผลแบบประเมินและภารกิจที่บันทึกไว้ในบัญชีของคุณ"
+                    : "Review assessment and task results saved to your account."
+                }
+                badge={locale === "th" ? "ข้อมูลบัญชีนี้" : "Your account"}
+              />
               <div className="card">
                 <p className="muted">
                   ประวัติผลการประเมินของสมาชิกที่เข้าสู่ระบบ
@@ -2893,46 +3389,63 @@ export default function Home() {
 
             {/* ---------- XAI ---------- */}
             <section id="xai">
-              <h1>Explainable Artificial Intelligence</h1>
+              <WorkspacePageHeading
+                locale={locale}
+                icon="info"
+                title={locale === "th" ? "อธิบายผลโมเดล" : "Explainable AI"}
+                description={
+                  locale === "th"
+                    ? "สำรวจตัวอย่างปัจจัยที่มีส่วนต่อผลการวิเคราะห์ของโมเดล"
+                    : "Explore sample feature contributions to model results."
+                }
+                badge={locale === "th" ? "ข้อมูลตัวอย่าง" : "Demo data"}
+              />
               <div className="two">
                 <div className="card">
                   <h3>Feature Contribution</h3>
-                  <table>
-                    <tbody>
-                      <tr>
-                        <td>Theta/Alpha ratio</td>
-                        <td>
-                          <div className="bar">
-                            <i style={{ width: "88%" }}></i>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Frontal Theta</td>
-                        <td>
-                          <div className="bar">
-                            <i style={{ width: "72%" }}></i>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Parietal Alpha</td>
-                        <td>
-                          <div className="bar">
-                            <i style={{ width: "61%" }}></i>
-                          </div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Beta power</td>
-                        <td>
-                          <div className="bar">
-                            <i style={{ width: "43%" }}></i>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div
+                    className="workspace-table-scroll"
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Feature contribution"
+                  >
+                    <table>
+                      <tbody>
+                        <tr>
+                          <td>Theta/Alpha ratio</td>
+                          <td>
+                            <div className="bar">
+                              <i style={{ width: "88%" }}></i>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Frontal Theta</td>
+                          <td>
+                            <div className="bar">
+                              <i style={{ width: "72%" }}></i>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Parietal Alpha</td>
+                          <td>
+                            <div className="bar">
+                              <i style={{ width: "61%" }}></i>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>Beta power</td>
+                          <td>
+                            <div className="bar">
+                              <i style={{ width: "43%" }}></i>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
                 <div className="card">
                   <h3>Interpretation</h3>

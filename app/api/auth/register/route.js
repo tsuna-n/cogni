@@ -50,6 +50,7 @@ async function register(request) {
     email,
     name: name || null,
     passwordHash: await hashPassword(password),
+    role: "user",
     createdAt: new Date().toISOString(),
     loginCount: 0,
     lastLoginAt: null,
@@ -62,7 +63,7 @@ async function register(request) {
     }
 
     await createSession(email);
-    return Response.json({ user: { email, name: user.name, role: "researcher" } }, { status: 201 });
+    return Response.json({ user: { email, name: user.name, role: "user" } }, { status: 201 });
   } catch (err) {
     if (isStorageError(err)) {
       return Response.json({ error: "storage_unavailable" }, { status: 503 });

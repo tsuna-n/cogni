@@ -1,9 +1,20 @@
-import { getSession } from "@/lib/auth/session";
-import { findUser, isStorageError } from "@/lib/auth/store";
-import { saveResearchRecord } from "@/lib/research/server-store";
+import { authorizeUser, privateResponseHeaders } from "@/lib/auth/authorization";
+import { isStorageError } from "@/lib/auth/store";
+import { listResearchRecords, saveResearchRecord } from "@/lib/research/server-store";
 import { normalizeResearchSubmission, ResearchValidationError } from "@/lib/research/validation";
 
 export const runtime = "nodejs";
+
+export async function GET() {
+  try {
+    const { user, response } = await authorizeUser();
+    if (response) return response;
+    return Response.json({ records: await listResearchRecords(user) }, { headers: privateResponseHeaders });
+  } catch (error) {
+    if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
+    throw error;
+  }
+}
 
 export async function POST(request) {
   try {
@@ -15,8 +26,8 @@ export async function POST(request) {
 }
 
 async function saveSummary(request) {
-  const session = await getSession();
-  if (!session || !(await findUser(session.email))) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const { user, response } = await authorizeUser();
+  if (response) return response;
   const origin = request.headers.get("origin");
   if (origin) {
     let source;
@@ -36,9 +47,9 @@ async function saveSummary(request) {
     throw error;
   }
   try {
-    const result = await saveResearchRecord(submission, session.email);
+    const result = await saveResearchRecord(submission, user.email);
     if (!result.ok) return Response.json({ error: result.reason }, { status: 409 });
-    return Response.json({ recordId: result.record.recordId, uploadedAt: result.record.uploadedAt, uploadedBy: result.record.uploadedBy }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ recordId: result.record.recordId, uploadedAt: result.record.uploadedAt, uploadedBy: result.record.uploadedBy }, { headers: privateResponseHeaders });
   } catch (error) {
     if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
     throw error;

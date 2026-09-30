@@ -1,5 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./dashboard.css";
+import "./workspace.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,7 +15,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "CogniLoad-XAI | Muse EEG Research",
-  description: "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV",
+  description:
+    "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg" },
   appleWebApp: {
@@ -23,7 +26,7 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: "#081522",
+  themeColor: "#0b0d10",
   width: "device-width",
   initialScale: 1,
 };

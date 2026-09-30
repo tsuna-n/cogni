@@ -1,14 +1,12 @@
-import { getSession } from "@/lib/auth/session";
-import { findUser, isAdminEmail, isStorageError } from "@/lib/auth/store";
+import { authorizeUser, privateResponseHeaders } from "@/lib/auth/authorization";
+import { isStorageError } from "@/lib/auth/store";
 import { getEffectiveStudyConfig, resetStudyConfig, saveStudyConfig } from "@/lib/research/study-settings-store";
 import { StudyConfigError } from "@/lib/server-config";
 
 async function authorized() {
   try {
-    const session = await getSession();
-    if (!session || !(await findUser(session.email))) return 401;
-    if (!isAdminEmail(session.email)) return 403;
-    return 200;
+    const { response } = await authorizeUser({ adminOnly: true });
+    return response?.status || 200;
   } catch (error) {
     if (isStorageError(error)) return 503;
     throw error;
@@ -16,7 +14,7 @@ async function authorized() {
 }
 
 function authorizationError(status) {
-  return Response.json({ error: status === 503 ? "settings_unavailable" : status === 401 ? "unauthorized" : "forbidden" }, { status });
+  return Response.json({ error: status === 503 ? "settings_unavailable" : status === 401 ? "unauthorized" : "forbidden" }, { status, headers: privateResponseHeaders });
 }
 
 function sameOrigin(request) {
@@ -31,7 +29,7 @@ function sameOrigin(request) {
   }
 }
 
-const noStore = { "Cache-Control": "no-store" };
+const noStore = privateResponseHeaders;
 
 export async function GET() {
   const status = await authorized();

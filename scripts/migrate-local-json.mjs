@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { getDataDirectory, getResearchDataDirectory, validateStudyConfig } from "../lib/server-config.js";
 import { getDatabase } from "../lib/server-database.js";
+import { getUserRole } from "../lib/auth/roles.mjs";
 
 async function readOptionalJson(file) {
   try {
@@ -41,8 +42,8 @@ export async function readLocalData() {
 export async function migrateLocalData(data, sql) {
   const imported = { accounts: 0, records: 0, study: 0 };
   for (const user of data.accounts) {
-    const rows = await sql`INSERT INTO cogniload_users (email, name, password_hash, created_at, login_count, last_login_at)
-      VALUES (${user.email}, ${user.name || null}, ${user.passwordHash}, ${user.createdAt || null}, ${user.loginCount || 0}, ${user.lastLoginAt || null})
+    const rows = await sql`INSERT INTO cogniload_users (email, name, password_hash, created_at, login_count, last_login_at, role, profile, profile_updated_at, profile_updated_by)
+      VALUES (${user.email}, ${user.name || null}, ${user.passwordHash}, ${user.createdAt || null}, ${user.loginCount || 0}, ${user.lastLoginAt || null}, ${getUserRole(user)}, ${JSON.stringify(user.profile || {})}::jsonb, ${user.profileUpdatedAt || null}, ${user.profileUpdatedBy || null})
       ON CONFLICT (email) DO NOTHING RETURNING email`;
     imported.accounts += rows.length;
   }

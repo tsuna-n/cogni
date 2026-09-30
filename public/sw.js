@@ -1,4 +1,4 @@
-const CACHE = "cogniload-static-v2";
+const CACHE = "cogniload-static-v4";
 const ASSETS = ["/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

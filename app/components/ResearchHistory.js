@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DashboardIcon from "./DashboardIcon";
 
 const COPY = {
   th: {
@@ -24,7 +25,8 @@ const COPY = {
     available: "เก็บอยู่",
     removed: "ลบแล้ว",
     compare: "เปรียบเทียบผลสรุปสองรอบ",
-    differentProtocol: "สองรอบนี้ใช้คนละโปรโตคอล โปรดตรวจขั้นตอนและเวลาที่ตั้งก่อนตีความผลต่าง",
+    differentProtocol:
+      "สองรอบนี้ใช้คนละโปรโตคอล โปรดตรวจขั้นตอนและเวลาที่ตั้งก่อนตีความผลต่าง",
     first: "รอบอ้างอิง",
     second: "รอบที่เปรียบเทียบ",
     choose: "เลือกรอบ",
@@ -78,7 +80,8 @@ const COPY = {
     available: "Saved",
     removed: "Removed",
     compare: "Compare two session summaries",
-    differentProtocol: "These sessions use different protocols. Check the procedure and planned timing before interpreting differences.",
+    differentProtocol:
+      "These sessions use different protocols. Check the procedure and planned timing before interpreting differences.",
     first: "Reference session",
     second: "Comparison session",
     choose: "Select a session",
@@ -132,7 +135,10 @@ const METRICS = [
 
 function number(value, digits, locale, signed = false) {
   if (value == null || !Number.isFinite(value)) return "—";
-  const formatted = new Intl.NumberFormat(locale === "th" ? "th-TH" : "en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  const formatted = new Intl.NumberFormat(locale === "th" ? "th-TH" : "en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
   return signed && value > 0 ? `+${formatted}` : formatted;
 }
 
@@ -142,18 +148,35 @@ function valueAt(summary, path) {
 
 function csvCell(value) {
   const raw = String(value ?? "");
-  const safe = !/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw) && /^[=+@\-\t\r]/.test(raw) ? "'" + raw : raw;
+  const safe =
+    !/^-?(?:\d+\.?\d*|\.\d+)$/.test(raw) && /^[=+@\-\t\r]/.test(raw)
+      ? "'" + raw
+      : raw;
   return `"${safe.replaceAll('"', '""')}"`;
 }
 
-export default function ResearchHistory({ sessions, locale = "th", loading, backfilling, source = "browser" }) {
+export default function ResearchHistory({
+  sessions,
+  locale = "th",
+  loading,
+  backfilling,
+  source = "browser",
+}) {
   const copy = COPY[locale] || COPY.th;
   const [firstId, setFirstId] = useState("");
   const [secondId, setSecondId] = useState("");
 
   useEffect(() => {
-    setFirstId((previous) => sessions.some((session) => session.id === previous) ? previous : sessions[1]?.id || sessions[0]?.id || "");
-    setSecondId((previous) => sessions.some((session) => session.id === previous) ? previous : sessions[0]?.id || "");
+    setFirstId((previous) =>
+      sessions.some((session) => session.id === previous)
+        ? previous
+        : sessions[1]?.id || sessions[0]?.id || "",
+    );
+    setSecondId((previous) =>
+      sessions.some((session) => session.id === previous)
+        ? previous
+        : sessions[0]?.id || "",
+    );
   }, [sessions]);
 
   useEffect(() => {
@@ -162,25 +185,114 @@ export default function ResearchHistory({ sessions, locale = "th", loading, back
       if (id) setSecondId(id);
     };
     window.addEventListener("research-summary-select", onSelect);
-    return () => window.removeEventListener("research-summary-select", onSelect);
+    return () =>
+      window.removeEventListener("research-summary-select", onSelect);
   }, []);
 
   const dateLocale = locale === "th" ? "th-TH" : "en-US";
-  const gameName = (session) => session.testMode ? copy.noGame : ["", locale === "th" ? "คี่หรือคู่" : "Odd or Even", locale === "th" ? "ลำดับสะท้อน" : "Echo Sequence", locale === "th" ? "รูปแบบเปลี่ยนแปลง" : "Pattern Drift"][session.gameId] || copy.noGame;
-  const groupName = (session) => session.testMode ? copy.deviceTest : session.studyGroup === "patient" ? copy.patient : session.studyGroup === "control" ? copy.control : copy.noGroup;
+  const gameName = (session) =>
+    session.testMode
+      ? copy.noGame
+      : [
+          "",
+          locale === "th" ? "คี่หรือคู่" : "Odd or Even",
+          locale === "th" ? "ลำดับสะท้อน" : "Echo Sequence",
+          locale === "th" ? "รูปแบบเปลี่ยนแปลง" : "Pattern Drift",
+        ][session.gameId] || copy.noGame;
+  const groupName = (session) =>
+    session.testMode
+      ? copy.deviceTest
+      : session.studyGroup === "patient"
+        ? copy.patient
+        : session.studyGroup === "control"
+          ? copy.control
+          : copy.noGroup;
   const statusName = (session) => copy[session.status] || session.status;
-  const optionLabel = (session) => `${new Date(session.startedMs).toLocaleString(dateLocale)} · ${session.participant || "—"} / ${session.sessionId || "—"} · ${statusName(session)}`;
+  const optionLabel = (session) =>
+    `${new Date(session.startedMs).toLocaleString(dateLocale)} · ${session.participant || "—"} / ${session.sessionId || "—"} · ${statusName(session)}`;
   const first = sessions.find((session) => session.id === firstId);
   const second = sessions.find((session) => session.id === secondId);
   const comparable = first && second && first.id !== second.id;
 
   const exportSummaries = () => {
-    const headers = ["record_id", "started_at_iso", "ended_at_iso", "participant_id", "session_id", "study_group", "condition", "protocol_version", "game_id", "status", "test_mode", "raw_eeg_removed", "total_seconds", "baseline_seconds", "task_seconds", "rest_seconds", "eeg_samples", "tp9_samples", "af7_samples", "af8_samples", "tp10_samples", "average_hz_per_channel", "clipped_samples", "clipped_percent", "missing_packets", "duplicate_packets", "reordered_packets", "event_markers", "game_trials", "game_correct", "game_errors", "game_accuracy_percent", "mean_reaction_ms"];
+    const headers = [
+      "record_id",
+      "uploaded_by",
+      "started_at_iso",
+      "ended_at_iso",
+      "participant_id",
+      "session_id",
+      "study_group",
+      "condition",
+      "protocol_version",
+      "game_id",
+      "status",
+      "test_mode",
+      "raw_eeg_removed",
+      "total_seconds",
+      "baseline_seconds",
+      "task_seconds",
+      "rest_seconds",
+      "eeg_samples",
+      "tp9_samples",
+      "af7_samples",
+      "af8_samples",
+      "tp10_samples",
+      "average_hz_per_channel",
+      "clipped_samples",
+      "clipped_percent",
+      "missing_packets",
+      "duplicate_packets",
+      "reordered_packets",
+      "event_markers",
+      "game_trials",
+      "game_correct",
+      "game_errors",
+      "game_accuracy_percent",
+      "mean_reaction_ms",
+    ];
     const rows = sessions.map((session) => {
       const summary = session.summary;
-      return [session.id, new Date(summary.startedMs).toISOString(), summary.endedMs ? new Date(summary.endedMs).toISOString() : "", summary.participant, summary.sessionId, summary.studyGroup, summary.condition, summary.protocolVersion || "", summary.gameId || "", summary.status, summary.testMode, source === "server" ? "" : Boolean(session.rawDeleted), summary.durationSeconds, summary.baselineSeconds, summary.taskSeconds, summary.restSeconds, summary.samples, ...summary.channelSamples, summary.averageHzPerChannel, summary.clippedSamples, summary.clippedPercent, summary.missingPackets, summary.duplicatePackets, summary.reorderedPackets, summary.markers, summary.game?.trials, summary.game?.correct, summary.game?.errors, summary.game?.accuracyPercent, summary.game?.meanRtMs].map(csvCell).join(",");
+      return [
+        session.id,
+        session.uploadedBy || session.ownerEmail || "",
+        new Date(summary.startedMs).toISOString(),
+        summary.endedMs ? new Date(summary.endedMs).toISOString() : "",
+        summary.participant,
+        summary.sessionId,
+        summary.studyGroup,
+        summary.condition,
+        summary.protocolVersion || "",
+        summary.gameId || "",
+        summary.status,
+        summary.testMode,
+        source === "server" ? "" : Boolean(session.rawDeleted),
+        summary.durationSeconds,
+        summary.baselineSeconds,
+        summary.taskSeconds,
+        summary.restSeconds,
+        summary.samples,
+        ...summary.channelSamples,
+        summary.averageHzPerChannel,
+        summary.clippedSamples,
+        summary.clippedPercent,
+        summary.missingPackets,
+        summary.duplicatePackets,
+        summary.reorderedPackets,
+        summary.markers,
+        summary.game?.trials,
+        summary.game?.correct,
+        summary.game?.errors,
+        summary.game?.accuracyPercent,
+        summary.game?.meanRtMs,
+      ]
+        .map(csvCell)
+        .join(",");
     });
-    const blob = new Blob(["\ufeff", headers.join(","), "\r\n", rows.join("\r\n"), "\r\n"], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob(
+      ["\ufeff", headers.join(","), "\r\n", rows.join("\r\n"), "\r\n"],
+      { type: "text/csv;charset=utf-8" },
+    );
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -189,35 +301,195 @@ export default function ResearchHistory({ sessions, locale = "th", loading, back
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  return <section className="research-history" aria-label={copy.title}>
-    <div className="study-heading">
-      <div><span className="study-kicker">SESSION HISTORY</span><h2>{copy.title}</h2><p className="muted">{source === "server" ? (locale === "th" ? "ผลสรุปที่ซิงก์ขึ้นเซิร์ฟเวอร์สำหรับรหัสผู้เข้าร่วมนี้" : "Server-synced summaries for this participant ID") : copy.note}</p></div>
-      <button type="button" className="secondary" disabled={!sessions.length || backfilling > 0} onClick={exportSummaries}>{copy.export}</button>
-    </div>
-    {backfilling > 0 && <p className="muted" role="status">{copy.backfilling}: {backfilling}</p>}
-    {!sessions.length ? <p className="card research-history-empty">{loading ? copy.loading : copy.empty}</p> : <>
-      <div className="research-history-scroll"><table className="research-history-table">
-        <thead><tr><th>{copy.date}</th><th>{copy.run}</th><th>{copy.group}</th><th>{copy.protocol}</th><th>{copy.game}</th><th>{copy.status}</th><th>{copy.task}</th><th>{copy.samples}</th><th>{copy.rate}</th><th>{copy.accuracy}</th><th>{copy.raw}</th></tr></thead>
-        <tbody>{sessions.map((session) => <tr key={session.id}>
-          <td>{new Date(session.startedMs).toLocaleString(dateLocale)}</td><td><strong>{session.participant || "—"}</strong><br />{session.sessionId || "—"}</td><td>{groupName(session)}</td><td>{session.summary.protocolVersion || "—"}</td><td>{gameName(session)}</td><td>{statusName(session)}</td>
-          <td>{number(session.summary.taskSeconds, 1, locale)}</td><td>{number(session.summary.samples, 0, locale)}</td><td>{number(session.summary.averageHzPerChannel, 1, locale)}</td><td>{number(session.summary.game?.accuracyPercent, 1, locale)}{session.summary.game?.accuracyPercent != null ? "%" : ""}</td><td>{source === "server" ? (locale === "th" ? "อยู่ในเครื่องผู้วิจัย" : "Researcher's device") : session.rawDeleted ? copy.removed : copy.available}</td>
-        </tr>)}</tbody>
-      </table></div>
-      <div className="card research-compare">
-        <h3>{copy.compare}</h3>
-        <div className="research-compare-pickers">
-          <label>{copy.first}<select value={firstId} onChange={(event) => setFirstId(event.target.value)}><option value="">{copy.choose}</option>{sessions.map((session) => <option key={session.id} value={session.id}>{optionLabel(session)}</option>)}</select></label>
-          <label>{copy.second}<select value={secondId} onChange={(event) => setSecondId(event.target.value)}><option value="">{copy.choose}</option>{sessions.map((session) => <option key={session.id} value={session.id}>{optionLabel(session)}</option>)}</select></label>
+  return (
+    <section className="research-history" aria-label={copy.title}>
+      <div className="study-heading">
+        <div>
+          <span className="study-kicker">SESSION HISTORY</span>
+          <h2>{copy.title}</h2>
+          <p className="muted">
+            {source === "server"
+              ? locale === "th"
+                ? "ผลสรุปที่ซิงก์ขึ้นเซิร์ฟเวอร์สำหรับรหัสผู้เข้าร่วมนี้"
+                : "Server-synced summaries for this participant ID"
+              : copy.note}
+          </p>
         </div>
-        {comparable && first.summary.protocolVersion && second.summary.protocolVersion && first.summary.protocolVersion !== second.summary.protocolVersion && <p className="study-signal-warning" role="status">{copy.differentProtocol} ({first.summary.protocolVersion} / {second.summary.protocolVersion})</p>}
-        {comparable ? <div className="research-history-scroll"><table className="research-history-table research-compare-table"><thead><tr><th>{copy.metric}</th><th>{copy.first}</th><th>{copy.second}</th><th>{copy.difference}</th></tr></thead><tbody>
-          {METRICS.map(([label, path, digits]) => {
-            const left = valueAt(first.summary, path);
-            const right = valueAt(second.summary, path);
-            return <tr key={path}><th scope="row">{copy[label]}</th><td>{number(left, digits, locale)}</td><td>{number(right, digits, locale)}</td><td>{number(left != null && right != null ? right - left : null, digits, locale, true)}</td></tr>;
-          })}
-        </tbody></table></div> : <p className="muted">{copy.selectTwo}</p>}
+        <button
+          type="button"
+          className="secondary"
+          disabled={!sessions.length || backfilling > 0}
+          onClick={exportSummaries}
+        >
+          {copy.export}
+        </button>
       </div>
-    </>}
-  </section>;
+      {backfilling > 0 && (
+        <p className="muted" role="status">
+          {copy.backfilling}: {backfilling}
+        </p>
+      )}
+      {!sessions.length ? (
+        <div className="research-history-empty history-empty" role="status">
+          <span className="history-empty-icon">
+            <DashboardIcon name="clock" size={27} />
+          </span>
+          <h3>{loading ? copy.loading : copy.empty}</h3>
+          {!loading && (
+            <p className="muted">
+              {source === "server"
+                ? locale === "th"
+                  ? "ผลสรุปจะแสดงที่นี่เมื่อมีการซิงก์รอบทดลองของผู้เข้าร่วมนี้"
+                  : "Summaries appear here when this participant's sessions are synced."
+                : locale === "th"
+                  ? "เมื่อบันทึกรอบทดลองแล้ว คุณสามารถดูผล เปรียบเทียบ และส่งออกจากที่นี่"
+                  : "Recorded sessions appear here for review, comparison, and export."}
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="research-history-scroll">
+            <table className="research-history-table">
+              <thead>
+                <tr>
+                  <th>{copy.date}</th>
+                  <th>{copy.run}</th>
+                  {source === "server" && <th>{locale === "th" ? "บัญชีที่บันทึก" : "Recorded by"}</th>}
+                  <th>{copy.group}</th>
+                  <th>{copy.protocol}</th>
+                  <th>{copy.game}</th>
+                  <th>{copy.status}</th>
+                  <th>{copy.task}</th>
+                  <th>{copy.samples}</th>
+                  <th>{copy.rate}</th>
+                  <th>{copy.accuracy}</th>
+                  <th>{copy.raw}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map((session) => (
+                  <tr key={session.id}>
+                    <td>
+                      {new Date(session.startedMs).toLocaleString(dateLocale)}
+                    </td>
+                    <td>
+                      <strong>{session.participant || "—"}</strong>
+                      <br />
+                      {session.sessionId || "—"}
+                    </td>
+                    {source === "server" && <td>{session.uploadedBy || "—"}</td>}
+                    <td>{groupName(session)}</td>
+                    <td>{session.summary.protocolVersion || "—"}</td>
+                    <td>{gameName(session)}</td>
+                    <td>{statusName(session)}</td>
+                    <td>{number(session.summary.taskSeconds, 1, locale)}</td>
+                    <td>{number(session.summary.samples, 0, locale)}</td>
+                    <td>
+                      {number(session.summary.averageHzPerChannel, 1, locale)}
+                    </td>
+                    <td>
+                      {number(session.summary.game?.accuracyPercent, 1, locale)}
+                      {session.summary.game?.accuracyPercent != null ? "%" : ""}
+                    </td>
+                    <td>
+                      {source === "server"
+                        ? locale === "th"
+                          ? "อยู่ในเครื่องผู้วิจัย"
+                          : "Researcher's device"
+                        : session.rawDeleted
+                          ? copy.removed
+                          : copy.available}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="card research-compare">
+            <h3>{copy.compare}</h3>
+            <div className="research-compare-pickers">
+              <label>
+                {copy.first}
+                <select
+                  value={firstId}
+                  onChange={(event) => setFirstId(event.target.value)}
+                >
+                  <option value="">{copy.choose}</option>
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {optionLabel(session)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {copy.second}
+                <select
+                  value={secondId}
+                  onChange={(event) => setSecondId(event.target.value)}
+                >
+                  <option value="">{copy.choose}</option>
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {optionLabel(session)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {comparable &&
+              first.summary.protocolVersion &&
+              second.summary.protocolVersion &&
+              first.summary.protocolVersion !==
+                second.summary.protocolVersion && (
+                <p className="study-signal-warning" role="status">
+                  {copy.differentProtocol} ({first.summary.protocolVersion} /{" "}
+                  {second.summary.protocolVersion})
+                </p>
+              )}
+            {comparable ? (
+              <div className="research-history-scroll">
+                <table className="research-history-table research-compare-table">
+                  <thead>
+                    <tr>
+                      <th>{copy.metric}</th>
+                      <th>{copy.first}</th>
+                      <th>{copy.second}</th>
+                      <th>{copy.difference}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {METRICS.map(([label, path, digits]) => {
+                      const left = valueAt(first.summary, path);
+                      const right = valueAt(second.summary, path);
+                      return (
+                        <tr key={path}>
+                          <th scope="row">{copy[label]}</th>
+                          <td>{number(left, digits, locale)}</td>
+                          <td>{number(right, digits, locale)}</td>
+                          <td>
+                            {number(
+                              left != null && right != null
+                                ? right - left
+                                : null,
+                              digits,
+                              locale,
+                              true,
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted">{copy.selectTwo}</p>
+            )}
+          </div>
+        </>
+      )}
+    </section>
+  );
 }

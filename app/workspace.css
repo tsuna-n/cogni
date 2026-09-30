@@ -1,0 +1,1193 @@
+/* Shared visual language for the experiment, tasks, history, admin, and auth. */
+body {
+  background: var(--bg);
+  font-size: 16px;
+  line-height: 1.65;
+}
+.workspace-shell {
+  background: var(--bg);
+  font-family: var(--font-geist-sans), Tahoma, sans-serif;
+}
+.workspace-shell:not(.dashboard-shell) main {
+  padding: 20px 24px 30px;
+}
+.workspace-shell:not(.dashboard-shell) main > section {
+  min-width: 0;
+}
+.workspace-page-heading {
+  margin-bottom: 22px;
+}
+.workspace-page-breadcrumb {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+.workspace-page-breadcrumb > span {
+  color: var(--muted);
+}
+.workspace-page-heading-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.workspace-page-heading-content > div {
+  min-width: 0;
+}
+.workspace-page-icon {
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-soft);
+  color: var(--accent-text);
+  box-shadow: 0 4px 8px rgb(0 0 0 / 0.12);
+}
+.workspace-page-icon.game {
+  color: var(--violet);
+  background: var(--violet-soft);
+  border-color: var(--violet-border);
+}
+.workspace-page-icon.clock {
+  color: var(--green);
+  background: var(--green-soft);
+  border-color: var(--green-border);
+}
+.workspace-page-icon.shield {
+  color: var(--accent-text);
+  background: var(--surface-soft);
+}
+.workspace-page-heading h1 {
+  margin: 0 0 5px;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.65px;
+  color: var(--text);
+}
+.workspace-page-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.workspace-page-badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--card) 65.1%, transparent);
+}
+.workspace-page-badge i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.workspace-shell:not(.dashboard-shell) .card {
+  min-width: 0;
+  border-radius: 9px;
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: 0 3px 9px rgb(0 0 0 / 0.12);
+  padding: 22px;
+}
+.workspace-shell:not(.dashboard-shell) .card .card {
+  background: var(--surface-soft);
+  box-shadow: none;
+  padding: 16px;
+}
+.workspace-shell:not(.dashboard-shell) h3 {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 600;
+}
+.workspace-shell:not(.dashboard-shell) p.muted {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.workspace-shell:not(.dashboard-shell) .hero {
+  align-items: center;
+}
+.workspace-shell:not(.dashboard-shell) .hero h1,
+.workspace-shell:not(.dashboard-shell) main > section > h1 {
+  font-size: 30px;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  font-weight: 650;
+}
+.workspace-shell:not(.dashboard-shell) main button,
+.workspace-shell:not(.dashboard-shell) main .filelabel {
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-weight: 550;
+}
+.workspace-shell:not(.dashboard-shell)
+  button:not(.secondary):not([class]):hover {
+  background: var(--primary-hover);
+}
+.workspace-shell:not(.dashboard-shell) main .secondary {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.workspace-shell:not(.dashboard-shell) main .secondary:hover {
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+.workspace-shell:not(.dashboard-shell) main input,
+.workspace-shell:not(.dashboard-shell) main select,
+.auth-card input {
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 6px;
+  background: var(--surface-soft);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.workspace-shell:not(.dashboard-shell) .formgrid {
+  gap: 18px;
+}
+.workspace-shell:not(.dashboard-shell) .formgrid label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.8;
+}
+.workspace-shell button:focus-visible,
+.workspace-shell .filelabel:focus-within,
+.auth-card button:focus-visible {
+  outline: 2px solid #348afa;
+  outline-offset: 3px;
+}
+.workspace-shell:not(.dashboard-shell) .card > .metric + .metric {
+  margin-top: 22px;
+}
+.workspace-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin-bottom: 18px;
+}
+.workspace-table-scroll table {
+  min-width: 460px;
+}
+.workspace-table-scroll:focus-visible {
+  outline: 2px solid #348afa;
+  outline-offset: 3px;
+}
+.workspace-shell input::placeholder,
+.auth-card input::placeholder {
+  color: var(--muted);
+}
+.workspace-shell input:focus-visible,
+.workspace-shell select:focus-visible,
+.auth-card input:focus-visible {
+  outline: 2px solid #7eb4f633;
+  outline-offset: 1px;
+  border-color: var(--border);
+  background: var(--card);
+}
+input[type="checkbox"] {
+  accent-color: #348afa;
+}
+.workspace-shell input:disabled,
+.workspace-shell select:disabled {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.workspace-shell:not(.dashboard-shell) .pill {
+  border-radius: 5px;
+  padding: 7px 9px;
+  font-size: 14px;
+}
+.workspace-shell .study-ready {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.workspace-shell .study-warn {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.workspace-shell .notice {
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1.9;
+  padding: 12px 15px;
+}
+.workspace-shell .study-signal-warning {
+  border-radius: 6px;
+  border-color: var(--red-border);
+  background: var(--red-soft);
+  color: var(--red);
+  line-height: 1.9;
+}
+.workspace-shell:not(.dashboard-shell) .study-heading {
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  align-items: flex-start;
+}
+.workspace-shell:not(.dashboard-shell) .study-heading h2 {
+  font-size: 23px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 8px 0 5px;
+}
+.workspace-shell:not(.dashboard-shell) .study-kicker {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-text);
+  background: var(--surface-soft);
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.workspace-shell .study-workspace {
+  gap: 16px;
+  margin-top: 0;
+}
+.workspace-shell .study-form {
+  gap: 14px;
+}
+.workspace-shell .study-form label {
+  font-size: 15px;
+  color: var(--muted);
+  font-weight: 500;
+  gap: 8px;
+}
+.workspace-shell .study-durations {
+  margin-top: 20px;
+  gap: 12px;
+}
+.workspace-shell .study-durations label {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 15px;
+  padding: 13px 14px;
+  gap: 8px;
+  border-radius: 7px;
+}
+.workspace-shell .study-durations label:nth-child(2) {
+  background: var(--violet-soft);
+  border-color: var(--violet-border);
+  color: var(--violet);
+}
+.workspace-shell .study-durations label:nth-child(3) {
+  background: var(--green-soft);
+  border-color: var(--green-border);
+  color: var(--green);
+}
+.workspace-shell .study-durations label span {
+  color: var(--muted);
+  font-size: 16px;
+}
+.workspace-shell .study-durations input {
+  background: var(--card);
+  padding: 7px 9px;
+}
+.workspace-shell .study-consent {
+  padding: 13px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.workspace-shell .study-consent input {
+  flex-shrink: 0;
+}
+.workspace-shell .study-phase {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  border-radius: 7px;
+  padding: 14px 16px;
+  font-size: 16px;
+  gap: 7px;
+}
+.workspace-shell .study-phase small {
+  color: var(--accent-text);
+  font-size: 13px;
+}
+.workspace-shell .study-phase strong {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 550;
+}
+.workspace-shell .study-phase.current {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.12);
+}
+.workspace-shell .study-phase.current strong {
+  color: var(--accent-text);
+}
+.workspace-shell .study-runbar {
+  background: var(--surface-soft);
+  height: 7px;
+}
+.workspace-shell .study-runbar > div {
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+}
+.workspace-shell .study-run-status {
+  font-size: 15px;
+  line-height: 1.8;
+  margin: 14px 0;
+}
+.workspace-shell .study-message {
+  font-size: 15px;
+  line-height: 1.9;
+}
+.workspace-shell .study-channel-count span {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  border-radius: 5px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.workspace-shell .study-channel-count .study-channel-alert {
+  background: var(--red-soft);
+  border-color: var(--red-border);
+  color: var(--red);
+}
+.workspace-shell .study-saved-item {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  border-radius: 7px;
+  padding: 14px;
+  flex-wrap: wrap;
+}
+.workspace-shell .study-saved-item strong {
+  font-size: 16px;
+  font-weight: 550;
+  color: var(--muted);
+}
+.workspace-shell .study-saved-item small {
+  font-size: 14px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.workspace-shell .study-saved-item .controls {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.workspace-shell .study-saved-item .controls button {
+  font-size: 14px;
+  padding: 7px 9px;
+}
+.workspace-shell:not(.dashboard-shell) .study-legacy {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+}
+.workspace-shell .study-legacy summary {
+  color: var(--muted);
+}
+.workspace-shell:not(.dashboard-shell) .metric b {
+  font-size: 30px;
+  color: var(--muted);
+  letter-spacing: -0.5px;
+  margin-bottom: 5px;
+}
+.workspace-shell:not(.dashboard-shell) .metric small {
+  font-size: 14px;
+}
+.workspace-shell:not(.dashboard-shell) .muse-line-noise,
+.workspace-shell:not(.dashboard-shell) .metric .muted {
+  font-size: 14px;
+}
+.workspace-shell #museCanvas {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: 7px;
+}
+.workspace-shell #museGattStages {
+  font-size: 15px;
+  gap: 7px !important;
+}
+.workspace-shell #museGattStages .badge {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  color: var(--muted);
+  border-radius: 5px;
+  font-size: 13px;
+}
+.task-selection-grid {
+  gap: 16px;
+  margin-top: 20px;
+}
+.task-sequence-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  margin-bottom: 18px;
+}
+.task-sequence-intro-copy {
+  min-width: 0;
+  max-width: 680px;
+}
+.task-sequence-intro h2 {
+  margin: 12px 0 8px;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+}
+.task-sequence-intro p {
+  margin: 0;
+}
+.workspace-shell .task-sequence-intro button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  flex-shrink: 0;
+}
+.task-practice {
+  margin: 18px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 16px;
+}
+.task-practice summary {
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.task-practice summary svg {
+  vertical-align: middle;
+  margin: 0 6px;
+}
+#games.sequence-in-progress .task-practice {
+  display: none;
+}
+.workspace-shell .task-selection-grid > .card {
+  display: flex;
+  flex-direction: column;
+  padding: 23px;
+}
+.task-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 19px;
+}
+.task-card-top > span:last-child {
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.task-card-icon {
+  height: 51px;
+  width: 51px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+}
+.task-card-icon.blue {
+  background: var(--surface-soft);
+  color: var(--accent-text);
+}
+.task-card-icon.purple {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.task-card-icon.green {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.workspace-shell .task-selection-grid h3 {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.workspace-shell .task-selection-grid p {
+  margin: 0 0 20px;
+  flex: 1;
+}
+.workspace-shell .task-selection-grid button {
+  align-self: flex-start;
+  padding: 8px 25px;
+}
+.workspace-shell #games > p.muted {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 12px 15px;
+  margin-bottom: 12px;
+}
+.workspace-shell #gamebox {
+  background: var(--surface-soft);
+  color: var(--muted);
+  margin-top: 17px;
+  min-width: 0;
+}
+.workspace-shell #gamebox > div {
+  min-width: 0;
+  max-width: 100%;
+}
+.game-sequence {
+  font-size: clamp(28px, 3.4vw, 48px);
+  letter-spacing: 12px;
+  margin: 12px 0;
+}
+.game-pattern {
+  font-size: clamp(28px, 3vw, 44px);
+  margin: 15px 0;
+}
+.workspace-shell #games table td:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: var(--muted);
+}
+.workspace-shell:not(.dashboard-shell) table th {
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border);
+  padding: 11px 13px;
+}
+.workspace-shell:not(.dashboard-shell) table td {
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 16px;
+  padding: 12px 13px;
+}
+.workspace-shell:not(.dashboard-shell) table tr:last-child td {
+  border-bottom: 0;
+}
+.workspace-shell:not(.dashboard-shell) table tbody tr:nth-child(even) {
+  background: var(--card);
+}
+.workspace-shell .admin-panel {
+  margin-top: 0;
+}
+.workspace-shell .admin-search {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 440px;
+  gap: 9px;
+}
+.workspace-shell .admin-participants {
+  gap: 9px;
+  margin-top: 17px;
+}
+.workspace-shell .admin-participants button {
+  padding: 12px 15px;
+  border-radius: 7px;
+}
+.workspace-shell .admin-participants button.active {
+  background: var(--cyan);
+  color: #ffffff;
+  border: 1px solid var(--cyan);
+}
+.workspace-shell .admin-participants button span {
+  font-size: 14px;
+}
+.workspace-shell:not(.dashboard-shell) .research-history-scroll {
+  border-color: var(--border);
+  border-radius: 7px;
+}
+.workspace-shell:not(.dashboard-shell) .research-history-table {
+  background: var(--card);
+}
+.workspace-shell:not(.dashboard-shell)
+  .research-history-table
+  tbody
+  tr:nth-child(even) {
+  background: var(--surface-soft);
+}
+.workspace-shell:not(.dashboard-shell) .research-history-table tbody tr:hover {
+  background: var(--surface-soft);
+}
+.workspace-shell:not(.dashboard-shell) .research-compare-pickers label {
+  color: var(--muted);
+  font-size: 15px;
+}
+.workspace-shell:not(.dashboard-shell) .research-compare h3 {
+  font-size: 20px;
+}
+.workspace-shell #historyTable {
+  overflow-x: auto;
+  border-radius: 7px;
+  margin-top: 17px;
+}
+.workspace-shell #historyTable table {
+  min-width: 720px;
+}
+.history-empty {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 255px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  background: var(--card);
+  padding: 24px 15px;
+}
+.history-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 59px;
+  height: 59px;
+  background: var(--surface-soft);
+  color: var(--accent-text);
+  border-radius: 17px;
+  margin-bottom: 17px;
+}
+.workspace-shell .history-empty h3 {
+  color: var(--muted);
+  font-size: 17px;
+  margin: 0 0 7px;
+  font-weight: 500;
+}
+.workspace-shell .history-empty p {
+  margin: 0;
+}
+.workspace-shell .research-history-empty h3 {
+  color: var(--muted);
+  font-size: 17px;
+  margin: 0 0 7px;
+}
+.workspace-shell .research-history-empty p {
+  margin: 0;
+  max-width: 430px;
+  font-size: 16px;
+  line-height: 1.9;
+}
+/* The sign-in and registration screen shares the same EEG illustration, colors, and controls. */
+.auth-bg {
+  background: var(--bg);
+  padding: 38px;
+  color: var(--text);
+}
+#authWave {
+  opacity: 0.1;
+}
+.auth-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 64px;
+  width: min(1200px, 100%);
+}
+.auth-introduction {
+  min-width: 0;
+}
+.auth-eyebrow {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  letter-spacing: 1.8px;
+  margin-bottom: 22px;
+}
+.auth-introduction h1 {
+  font-size: clamp(34px, 3vw, 44px);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -1.25px;
+  line-height: 1.7;
+  margin: 0 0 15px;
+}
+.auth-introduction h1 > span {
+  color: var(--accent-text);
+}
+.auth-introduction p {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 2;
+  max-width: 480px;
+  margin: 0;
+}
+.auth-eeg-visual {
+  height: 280px;
+  margin: 20px 0 24px;
+  background: url("/eeg-research.svg") center/contain no-repeat;
+  border-radius: 10px;
+}
+.auth-feature-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 17px;
+}
+.auth-feature-list span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.auth-feature-list svg {
+  color: var(--accent-text);
+}
+.auth-inner {
+  width: 100%;
+  max-width: 460px;
+  justify-self: end;
+}
+.auth-logo {
+  width: 59px;
+  height: 59px;
+  border-radius: 17px;
+  background: var(--cyan);
+  color: #ffffff;
+  border: 0;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.13);
+  margin-bottom: 15px;
+}
+.auth-inner > .brand {
+  color: var(--text);
+  font-size: 28px !important;
+  letter-spacing: -0.6px;
+}
+.auth-inner > .secondary {
+  font-size: 14px;
+  border-radius: 5px;
+  margin-top: 9px;
+  padding: 5px 9px;
+  background: color-mix(in srgb, var(--card) 70.2%, transparent);
+  color: var(--muted);
+}
+.auth-inner > p.muted {
+  font-size: 14px;
+  margin-top: 10px !important;
+  color: var(--muted);
+}
+.auth-card {
+  background: var(--card);
+  border-color: var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 35px rgb(0 0 0 / 0.12);
+  padding: 27px;
+  margin-top: 22px;
+}
+.auth-card h2 {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.auth-card > p.muted {
+  font-size: 15px;
+  color: var(--muted);
+}
+.auth-tabs {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  padding: 4px;
+  border-radius: 6px;
+  gap: 5px;
+  margin: 18px 0 20px;
+}
+.auth-tab {
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.auth-tab.active {
+  background: var(--cyan);
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.12);
+}
+.auth-card label {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.9;
+  margin-bottom: 14px;
+}
+.auth-card label > input {
+  margin-top: 6px;
+}
+.auth-card input[type="checkbox"] {
+  margin-top: 0;
+}
+.auth-card button[type="submit"] {
+  background: var(--cyan);
+  color: #ffffff;
+  border-radius: 6px;
+  font-family: inherit;
+  padding: 11px 14px;
+  font-size: 16px;
+  font-weight: 550;
+}
+.auth-card button[type="submit"]:hover {
+  background: var(--primary-hover);
+}
+.auth-card #authMsg {
+  font-size: 14px;
+  line-height: 1.9;
+  margin-bottom: 0;
+}
+.auth-foot {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.9;
+}
+@media (max-width: 1150px) {
+  .workspace-shell .study-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .workspace-shell .study-saved-item .controls {
+    flex-shrink: 1;
+  }
+  .auth-layout {
+    gap: 45px;
+  }
+}
+@media (max-width: 900px) {
+  .workspace-shell:not(.dashboard-shell) main {
+    padding: 18px;
+  }
+  .workspace-page-badge {
+    display: none;
+  }
+  .workspace-shell .study-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-shell:not(.dashboard-shell) .hero {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .workspace-shell:not(.dashboard-shell) .card {
+    padding: 19px;
+  }
+  .auth-layout {
+    gap: 30px;
+  }
+  .auth-introduction h1 {
+    font-size: 34px;
+  }
+  .auth-feature-list {
+    gap: 11px;
+  }
+  .auth-feature-list span {
+    font-size: 13px;
+  }
+  .auth-eeg-visual {
+    height: 240px;
+  }
+}
+@media (max-width: 700px) {
+  .task-sequence-intro {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+  }
+  .task-sequence-intro h2 {
+    font-size: 22px;
+    line-height: 1.6;
+  }
+  .workspace-shell:not(.dashboard-shell) .formgrid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .auth-bg {
+    padding: 24px 17px;
+  }
+  .auth-layout {
+    display: block;
+    max-width: 420px;
+  }
+  .auth-introduction {
+    display: none;
+  }
+  .auth-inner {
+    max-width: none;
+  }
+  .workspace-page-heading {
+    margin-bottom: 17px;
+  }
+  .workspace-page-breadcrumb {
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .workspace-page-heading-content {
+    gap: 11px;
+    align-items: flex-start;
+  }
+  .workspace-page-icon {
+    width: 41px;
+    height: 41px;
+    border-radius: 11px;
+  }
+  .workspace-page-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+  .workspace-page-heading h1 {
+    font-size: 28px;
+    line-height: 1.4;
+  }
+  .workspace-page-heading p {
+    font-size: 15px;
+  }
+  .workspace-shell:not(.dashboard-shell) main {
+    padding: 16px 12px 24px;
+  }
+  .workspace-shell:not(.dashboard-shell) .card {
+    padding: 17px;
+  }
+  .workspace-shell .study-form {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .workspace-shell .study-durations,
+  .workspace-shell .study-phase-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .workspace-shell .study-phase {
+    display: grid;
+    grid-template-columns: 20px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 13px;
+  }
+  .workspace-shell .study-phase strong {
+    font-size: 15px;
+  }
+  .workspace-shell .study-phase span {
+    font-size: 14px;
+  }
+  .workspace-shell:not(.dashboard-shell) .study-heading {
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 15px;
+  }
+  .workspace-shell:not(.dashboard-shell) .study-heading h2 {
+    font-size: 22px;
+  }
+  .workspace-shell:not(.dashboard-shell) .study-heading p.muted {
+    font-size: 15px;
+  }
+  .workspace-shell .study-run-status {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .task-selection-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .workspace-shell .task-selection-grid > .card {
+    padding: 20px;
+  }
+  .task-card-top {
+    margin-bottom: 13px;
+  }
+  .task-card-icon {
+    width: 43px;
+    height: 43px;
+    border-radius: 12px;
+  }
+  .task-card-icon svg {
+    width: 23px;
+    height: 23px;
+  }
+  .workspace-shell .task-selection-grid p {
+    font-size: 15px;
+    margin-bottom: 16px;
+  }
+  .workspace-shell #gamebox {
+    padding: 15px !important;
+  }
+  .game-sequence {
+    letter-spacing: 6px;
+  }
+  .game-pattern {
+    font-size: 32px;
+  }
+  .workspace-shell #historyTable table {
+    font-size: 14px;
+  }
+  .workspace-shell .history-empty h3 {
+    font-size: 16px;
+  }
+  .workspace-shell .history-empty p.muted {
+    font-size: 14px;
+  }
+  .workspace-shell .study-saved-item {
+    align-items: flex-start;
+  }
+  .workspace-shell .study-saved-item .controls {
+    margin-top: 5px;
+  }
+  .workspace-shell .study-marker input {
+    min-width: 0;
+  }
+  .workspace-shell .admin-panel > .study-card {
+    margin-bottom: 12px;
+  }
+  .workspace-shell .admin-participants button {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .workspace-shell .admin-participants button span {
+    font-size: 13px;
+  }
+  .auth-card {
+    padding: 24px;
+  }
+  .auth-foot {
+    font-size: 13px;
+  }
+}
+
+/* A single ordered recording flow, available beside the live game and in setup. */
+.game-sequence-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.game-sequence-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.game-sequence-steps li {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  border-radius: 7px;
+  min-width: 0;
+}
+.game-sequence-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-size: 16px;
+}
+.game-sequence-steps strong {
+  display: block;
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 550;
+}
+.game-sequence-steps small {
+  display: block;
+  font-size: 14px;
+  margin-top: 5px;
+  color: var(--muted);
+}
+.game-sequence-steps .current {
+  background: var(--surface-soft);
+  border-color: var(--border);
+}
+.game-sequence-steps .current > span {
+  background: var(--cyan);
+  color: white;
+}
+.game-sequence-steps .current strong {
+  color: var(--accent-text);
+}
+.game-sequence-steps .complete {
+  background: var(--green-soft);
+  border-color: var(--green-border);
+}
+.game-sequence-steps .complete > span {
+  background: var(--green-soft);
+  color: var(--green);
+}
+.game-sequence-steps .complete strong {
+  color: var(--green);
+}
+.game-sequence-status {
+  margin-top: 17px;
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+.game-sequence-controls .controls {
+  margin: 15px 0 0;
+}
+.game-sequence-controls .controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.game-sequence-controls button:disabled {
+  opacity: 0.65;
+}
+#games.sequence-in-progress .task-selection-grid {
+  display: none;
+}
+#gameSequenceControls:not(:empty) {
+  margin-bottom: 17px;
+}
+@media (max-width: 700px) {
+  .game-sequence-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .game-sequence-steps {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .game-sequence-steps li {
+    padding: 11px 12px;
+  }
+  .game-sequence-steps strong {
+    font-size: 15px;
+  }
+  .game-sequence-steps small {
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .game-sequence-controls .controls button {
+    font-size: 15px !important;
+    max-width: 100%;
+  }
+  .game-sequence-status {
+    font-size: 15px;
+  }
+}
+
+.workspace-shell button.workspace-menu-button:hover,
+.workspace-shell button.workspace-refresh:hover,
+.workspace-shell button.workspace-logout:hover { background: var(--surface-raised); color: var(--text); }
+.auth-card input:focus-visible { border-color: var(--accent-text); }
+.auth-tab:not(.active):hover { background: var(--surface-raised); color: var(--text); }
+.auth-card { box-shadow: 0 16px 48px #00000030; }
+.workspace-shell .study-saved-item strong,
+.workspace-shell:not(.dashboard-shell) .metric b { color: var(--text); }
