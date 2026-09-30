@@ -1,5 +1,7 @@
 CogniLoad-XAI is a browser-based Muse 2 / Muse S (Classic protocol) EEG research workspace. The experiment page records four EEG channels (TP9, AF7, AF8, TP10) continuously through a configured baseline, a task, and a configured post-task rest, then exports one CSV per session.
 
+คู่มือภาษาไทย: [อธิบายโปรเจกต์ โครงสร้างฐานข้อมูล และการจัดการผ่าน DBeaver](docs/project-and-database.th.md)
+
 The interface supports Thai and English. Use the **English / ไทย** button on the sign-in screen or in the app header to switch languages. The choice is saved in this browser and survives reloads. On first visit, the app chooses Thai for a Thai browser locale and English otherwise. Changing the interface language does not change recorded EEG data or CSV field names.
 
 ## Running a study session
