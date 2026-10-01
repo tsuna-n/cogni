@@ -6,6 +6,7 @@ import ResearchHistory from "./ResearchHistory";
 import DashboardUserOverview from "./DashboardUserOverview";
 import { filterOverviewUsers } from "@/lib/dashboard/user-overview.mjs";
 import DashboardUserEditor from "./DashboardUserEditor";
+import DashboardUserCreator from "./DashboardUserCreator";
 import Icon from "./DashboardIcon";
 
 function userDraft(user) {
@@ -22,7 +23,7 @@ function userDraft(user) {
   };
 }
 
-export default function DashboardUsers({ locale = "th", enabled = false, search = "", view = "overview", onViewChange, onClearSearch }) {
+export default function DashboardUsers({ locale = "th", enabled = false, accountRole = "user", accountEmail = "", search = "", view = "overview", onViewChange, onClearSearch }) {
   const t = (th, en) => locale === "th" ? th : en;
   const [users, setUsers] = useState([]);
   const [records, setRecords] = useState([]);
@@ -39,6 +40,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, search 
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [creating, setCreating] = useState(false);
   const requestId = useRef(0);
 
   const load = useCallback(async () => {
@@ -61,6 +63,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, search 
       if (id !== requestId.current) return;
       if (["unauthorized", "forbidden"].includes(cause.message)) {
         setUsers([]); setRecords([]); setDraft(null); setSelectedEmail(""); setDirty(false);
+        setCreating(false);
       }
       setError(cause.message);
     } finally {
@@ -93,6 +96,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, search 
   const select = (user) => {
     if (dirty && !window.confirm(t("มีข้อมูลที่ยังไม่บันทึก ต้องการเปลี่ยนผู้ใช้หรือไม่?", "Discard unsaved changes and switch users?"))) return false;
     setSelectedEmail(user?.email || "");
+    setCreating(false);
     setDraft(user ? userDraft(user) : null);
     setDirty(false); setError(""); setMessage("");
     return true;
@@ -186,10 +190,24 @@ export default function DashboardUsers({ locale = "th", enabled = false, search 
     onViewChange(tab.id);
     document.getElementById(`dashboard-tab-${tab.id}`)?.focus();
   };
+  const startCreating = () => {
+    if (!select(null)) return;
+    setCreating(true);
+    onViewChange("users");
+  };
+  const created = (user) => {
+    ++requestId.current;
+    setLoading(false);
+    setUsers((current) => [...current.filter((item) => item.email !== user.email), user].sort((a, b) => a.email.localeCompare(b.email)));
+    select(user);
+    resetFilters();
+    setUpdatedAt(new Date());
+    setMessage(t("เพิ่มผู้ใช้แล้ว", "User created."));
+  };
   return <div className="dashboard-users dashboard-production" data-no-translate aria-labelledby="dashboard-users-title">
     <div className="dashboard-workspace-heading">
       <div><div className="dash-breadcrumb">{t("พื้นที่วิจัย", "Research workspace")} <span>/</span> {t("แดชบอร์ด", "Dashboard")}</div><h1 id="dashboard-users-title">{t("แดชบอร์ด", "Dashboard")}</h1><p>{currentTab.description}</p></div>
-      <div className="dashboard-workspace-actions"><small>{loading ? t("กำลังอัปเดต…", "Updating…") : updatedAt ? `${t("ล่าสุด", "Updated")} ${updatedAt.toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })}` : ""}</small><button type="button" className="dash-button dash-outline" onClick={reload} disabled={loading || saving}><Icon name="refresh" size={16} />{t("รีเฟรช", "Refresh")}</button></div>
+      <div className="dashboard-workspace-actions"><small>{loading ? t("กำลังอัปเดต…", "Updating…") : updatedAt ? `${t("ล่าสุด", "Updated")} ${updatedAt.toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })}` : ""}</small>{accountRole === "admin" && <button type="button" className="dash-button" onClick={startCreating} disabled={saving || creating}>{t("เพิ่มผู้ใช้", "Add user")}</button>}<button type="button" className="dash-button dash-outline" onClick={reload} disabled={loading || saving}><Icon name="refresh" size={16} />{t("รีเฟรช", "Refresh")}</button></div>
     </div>
     <div className="dashboard-view-tabs" role="tablist" aria-label={t("มุมมองแดชบอร์ด", "Dashboard views")}>{tabs.map((tab, index) => <button key={tab.id} type="button" role="tab" id={`dashboard-tab-${tab.id}`} aria-selected={view === tab.id} aria-controls={`dashboard-panel-${tab.id}`} tabIndex={view === tab.id ? 0 : -1} onKeyDown={(event) => navigateTab(event, index)} onClick={() => onViewChange(tab.id)}><Icon name={tab.icon} size={18} /><span>{tab.label}</span>{tab.id === "users" && <small>{users.length}</small>}</button>)}</div>
     {error && <div role="alert" className="dashboard-feedback dashboard-feedback-error"><Icon name="info" size={18} /><span>{errors[error] || t("โหลดหรือบันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่", "Could not load or save details. Please try again.")}</span><button type="button" className="dash-text-link" onClick={reload} disabled={loading || saving}>{t("ลองใหม่", "Retry")}</button></div>}
@@ -211,7 +229,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, search 
         {!loading && !filtered.length && <div className="dashboard-directory-empty"><Icon name="users" size={25} /><p>{t("ไม่พบผู้ใช้ตามตัวกรอง", "No matching users")}</p><button type="button" className="dash-text-link" onClick={resetFilters}>{t("ล้างตัวกรอง", "Clear filters")}</button></div>}
         <div className="dashboard-list-pagination"><button type="button" className="secondary" aria-label={t("หน้าก่อนหน้า", "Previous page")} disabled={currentPage === 0 || saving} onClick={() => setPage(currentPage - 1)}><Icon name="chevron" size={14} /></button><span>{currentPage + 1} / {pageCount}</span><button type="button" className="secondary" aria-label={t("หน้าถัดไป", "Next page")} disabled={currentPage + 1 === pageCount || saving} onClick={() => setPage(currentPage + 1)}><Icon name="chevron" size={14} /></button></div>
       </aside>
-      <div className="card dashboard-user-details">{draft && selected ? <DashboardUserEditor key={selected.email} user={selected} draft={draft} locale={locale} saving={saving} dirty={dirty} onChange={change} onSave={save} onReset={resetDraft} /> : <div className="dashboard-panel-empty"><span className="dashboard-empty-icon"><Icon name="users" size={32} /></span><h2>{t("เลือกผู้ใช้เพื่อเริ่มจัดการ", "Select a user to get started")}</h2><p>{t("ดูข้อมูลผู้เข้าร่วม กรอกคะแนน MMSE และบันทึกหมายเหตุจากแผงนี้", "Review participant details, enter MMSE scores, and save notes here.")}</p></div>}</div>
+      <div className="card dashboard-user-details">{creating && accountRole === "admin" ? <DashboardUserCreator locale={locale} adminEmail={accountEmail} saving={saving} onBusyChange={setSaving} onCreated={created} onCancel={() => setCreating(false)} /> : draft && selected ? <DashboardUserEditor key={selected.email} user={selected} draft={draft} locale={locale} saving={saving} dirty={dirty} onChange={change} onSave={save} onReset={resetDraft} /> : <div className="dashboard-panel-empty"><span className="dashboard-empty-icon"><Icon name="users" size={32} /></span><h2>{t("เลือกผู้ใช้เพื่อเริ่มจัดการ", "Select a user to get started")}</h2><p>{t("ดูข้อมูลผู้เข้าร่วม กรอกคะแนน MMSE และบันทึกหมายเหตุจากแผงนี้", "Review participant details, enter MMSE scores, and save notes here.")}</p></div>}</div>
     </div>
     <div role="tabpanel" id="dashboard-panel-summaries" aria-labelledby="dashboard-tab-summaries" hidden={view !== "summaries"}>
       <div className="dashboard-results-toolbar"><div><h2>{t("ผลสรุปการทดลอง", "Session summaries")}</h2><p className="muted">{sessions.length} {t("รอบที่ซิงก์แล้ว", "synced sessions")}</p></div><label>{t("บัญชี / ผู้เข้าร่วม", "Account / participant")}<select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}><option value="">{t("ทุกบัญชี", "All accounts")}</option>{users.map((user) => <option key={user.email} value={user.email}>{user.name || user.email}{user.profile.participantId ? ` · ${user.profile.participantId}` : ""}</option>)}</select></label></div>

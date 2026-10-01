@@ -2748,6 +2748,8 @@ export default function Home() {
                 key={`${accountEmail}:${accountRole}`}
                 locale={locale}
                 enabled={canManageUserData}
+                accountRole={accountRole}
+                accountEmail={accountEmail}
                 search={dashboardSearch}
                 view={dashboardView}
                 onViewChange={setDashboardView}

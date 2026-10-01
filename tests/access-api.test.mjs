@@ -7,7 +7,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { hashPassword } from "../lib/auth/password.js";
+import { hashPassword, verifyPassword } from "../lib/auth/password.js";
 import { summarizeResearchSession } from "../lib/research-summary.mjs";
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,7 +105,7 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
       ["/api/research/summaries", "GET"], ["/api/research/summaries", "POST"],
       ["/api/admin/participants", "GET"], ["/api/admin/participants/P001", "GET"],
       ["/api/admin/settings", "GET"], ["/api/admin/settings", "PUT"], ["/api/admin/settings", "DELETE"],
-      ["/api/dashboard/users", "GET"], ["/api/dashboard/users/user%40example.test", "PUT"],
+      ["/api/dashboard/users", "GET"], ["/api/dashboard/users", "POST"], ["/api/dashboard/users/user%40example.test", "PUT"],
     ]) assert.equal((await request(endpoint, { method })).response.status, 401, `${method} ${endpoint}`);
   });
   await t.test("researchers cannot access admin APIs or impersonate a role", async () => {
@@ -113,6 +113,7 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
       ["/api/admin/participants?role=admin&email=admin@example.test", "GET"],
       ["/api/admin/participants/P001", "GET"],
       ["/api/admin/settings", "GET"], ["/api/admin/settings", "PUT"], ["/api/admin/settings", "DELETE"],
+      ["/api/dashboard/users?role=admin", "POST"],
     ]) assert.equal((await request(endpoint, { cookie: aliceCookie, method, headers: { "x-user-role": "admin" } })).response.status, 403);
     const payload = Buffer.from(JSON.stringify({ email: "alice@example.test", role: "admin", exp: Date.now() + 60_000 })).toString("base64url");
     const signed = createHmac("sha256", secret).update(payload).digest("base64url");
@@ -189,6 +190,7 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
   await t.test("ordinary users cannot list or update other users through forged role parameters", async () => {
     const list = await request("/api/dashboard/users?role=admin", { cookie: userCookie, headers: { "x-user-role": "researcher" } });
     assert.equal(list.response.status, 403);
+    assert.equal((await request("/api/dashboard/users", { cookie: userCookie, method: "POST", body: { role: "admin", adminEmail: "admin@example.test", adminPassword: password } })).response.status, 403);
     for (const email of ["alice@example.test", "user@example.test"]) {
       const saved = await request(`/api/dashboard/users/${encodeURIComponent(email)}`, { cookie: userCookie, method: "PUT", body: { name: "Forged", profile: {}, role: "admin" } });
       assert.equal(saved.response.status, 403);
@@ -199,6 +201,84 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
     assert.equal((await request("/api/admin/participants", { cookie: adminCookie })).data.participants[0].sessionCount, 2);
     assert.equal((await request("/api/admin/participants/P001", { cookie: adminCookie })).data.records.length, 2);
     assert.equal((await request("/api/admin/settings", { cookie: adminCookie })).response.status, 200);
+  });
+  await t.test("admin creation requires their own credentials and persists the selected role without switching sessions", async () => {
+    const newPassword = "new-account-password";
+    const body = { email: "created-user@example.test", name: " New user ", password: newPassword, role: "user", adminEmail: "admin@example.test", adminPassword: password };
+    const create = (changes = {}, headers = {}) => request("/api/dashboard/users", { cookie: adminCookie, method: "POST", body: { ...body, ...changes }, headers });
+    for (const [changes, error] of [
+      [{ email: "invalid" }, "invalid_email"], [{ name: "a".repeat(81) }, "invalid_name"],
+      [{ password: "short" }, "weak_password"], [{ password: "a".repeat(201) }, "weak_password"],
+      [{ role: "owner" }, "invalid_role"], [{ role: undefined }, "invalid_role"],
+      [{ adminPassword: "" }, "missing_admin_credentials"], [{ adminEmail: 123 }, "missing_admin_credentials"],
+      [{ passwordHash: "forged" }, "invalid_body"],
+    ]) {
+      const result = await create(changes);
+      assert.equal(result.response.status, 400);
+      assert.equal(result.data.error, error);
+    }
+    assert.equal((await create({}, { origin: "https://attacker.example" })).response.status, 403);
+    assert.equal((await create({}, { origin: "invalid" })).response.status, 403);
+    assert.equal((await create({ name: "a".repeat(17000) })).response.status, 413);
+    assert.equal((await request("/api/dashboard/users", { cookie: adminCookie, method: "POST" })).response.status, 415);
+    for (const raw of ["{", "null", "[]"]) {
+      const malformed = await fetch(`${base}/api/dashboard/users`, { method: "POST", headers: { cookie: adminCookie, "Content-Type": "application/json" }, body: raw });
+      assert.equal(malformed.status, 400);
+    }
+    for (const changes of [{ adminPassword: "incorrect" }, { adminEmail: "alice@example.test" }]) {
+      const result = await create(changes);
+      assert.equal(result.response.status, 403);
+      assert.equal(result.data.error, "invalid_admin_credentials");
+      assert.equal(JSON.parse(await readFile(usersFile, "utf8"))[body.email], undefined);
+    }
+    for (const role of ["user", "researcher", "admin"]) {
+      const email = `created-${role}@example.test`;
+      const result = await create({ email: ` ${email.toUpperCase()} `, role, adminEmail: " ADMIN@EXAMPLE.TEST " }, { origin: base });
+      assert.equal(result.response.status, 201);
+      assert.equal(result.response.headers.get("set-cookie"), null);
+      assert.match(result.response.headers.get("cache-control"), /no-store/);
+      assert.equal(result.data.user.email, email);
+      assert.equal(result.data.user.name, "New user");
+      assert.equal(result.data.user.role, role);
+      assert.equal(result.data.user.loginCount, 0);
+      assert.deepEqual(result.data.user.profile, {});
+      assert.equal(JSON.stringify(result.data).includes("password"), false);
+      const stored = JSON.parse(await readFile(usersFile, "utf8"))[email];
+      assert.equal(stored.role, role);
+      assert.notEqual(stored.passwordHash, newPassword);
+      assert.ok(await verifyPassword(newPassword, stored.passwordHash));
+      assert.equal(stored.adminPassword, undefined);
+      assert.equal(stored.adminEmail, undefined);
+      const signedIn = await request("/api/auth/login", { method: "POST", body: { email, password: newPassword } });
+      assert.equal(signedIn.response.status, 200);
+      assert.equal(signedIn.data.user.role, role);
+      const cookie = signedIn.response.headers.get("set-cookie").split(";")[0];
+      assert.equal((await request("/api/admin/settings", { cookie })).response.status, role === "admin" ? 200 : 403);
+      assert.equal((await request("/api/dashboard/users", { cookie })).response.status, role === "user" ? 403 : 200);
+      if (role === "admin") {
+        // A second administrator's correct credentials cannot confirm the original admin's action.
+        const different = await create({ email: "wrong-admin@example.test", adminEmail: email, adminPassword: newPassword });
+        assert.equal(different.response.status, 403);
+        assert.equal(different.data.error, "invalid_admin_credentials");
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const failed = await request("/api/dashboard/users", { cookie, method: "POST", body: { ...body, email: "rate-test@example.test", adminEmail: email, adminPassword: "incorrect" } });
+          assert.equal(failed.response.status, 403);
+        }
+        const limited = await request("/api/dashboard/users", { cookie, method: "POST", body: { ...body, adminEmail: email, adminPassword: newPassword } });
+        assert.equal(limited.response.status, 429);
+        assert.ok(Number(limited.response.headers.get("retry-after")) > 0);
+      }
+    }
+    const duplicate = await create();
+    assert.equal(duplicate.response.status, 409);
+    assert.equal(duplicate.data.error, "email_taken");
+    const competing = await Promise.all([create({ email: "race@example.test" }), create({ email: "race@example.test" })]);
+    assert.deepEqual(competing.map((result) => result.response.status).sort(), [201, 409]);
+    const unchanged = await request("/api/auth/me", { cookie: adminCookie });
+    assert.equal(unchanged.data.user.email, "admin@example.test");
+    assert.equal(unchanged.data.user.role, "admin");
+    const listed = (await request("/api/dashboard/users", { cookie: adminCookie })).data.users;
+    assert.equal(listed.find((user) => user.email === "created-researcher@example.test").role, "researcher");
   });
   await t.test("signup always stores ordinary users despite requested privileged roles", async () => {
     for (const role of ["admin", "researcher"]) {

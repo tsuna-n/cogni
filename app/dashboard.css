@@ -87,7 +87,7 @@
 .dashboard-personal-with-tabs { max-width: 1320px; margin: 0 auto; }
 .dashboard-personal-with-tabs .dash-heading { display: none; }
 @media (max-width: 1100px) { .dashboard-production .user-overview-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 950px) { .dashboard-production .dashboard-users-grid { grid-template-columns: minmax(0, 1fr); } .dashboard-production .dashboard-user-list ul { max-height: 270px; } }
+@media (max-width: 950px) { .dashboard-workspace-heading { flex-wrap: wrap; } .dashboard-workspace-actions { margin-left: auto; } .dashboard-production .dashboard-users-grid { grid-template-columns: minmax(0, 1fr); } .dashboard-production .dashboard-user-list ul { max-height: 270px; } }
 @media (max-width: 650px) {
   .dashboard-workspace-heading { gap: 12px; align-items: flex-start; margin-bottom: 18px; }
   .dashboard-workspace-heading .dash-breadcrumb { font-size: 11px; }

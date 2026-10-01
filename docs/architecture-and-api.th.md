@@ -123,6 +123,7 @@ API อยู่ same origin ใช้ cookie ที่ login แล้ว JSON 
 | `GET /api/auth/me` | Login | cookie | 200 `{user}`; unauthorized `{user:null}` |
 | `POST /api/auth/logout` | ลบ cookie ปัจจุบัน | ไม่มี | `{ok:true}` |
 | `GET /api/dashboard/users` | researcher/admin | ไม่มี | `{users:[...]}` |
+| `POST /api/dashboard/users` | admin + ยืนยันบัญชีปัจจุบัน | `{email,password,name?,role,adminEmail,adminPassword}` | 201 `{user:...}` โดยคง session แอดมิน |
 | `PUT /api/dashboard/users/[email]` | researcher/admin | `{name,profile,expectedUpdatedAt}` | `{user:...}` |
 | `GET /api/research/summaries` | Login | ไม่มี | `{records:[...]}`: user เฉพาะตน, staff ทุกบัญชี |
 | `POST /api/research/summaries` | Login | `{recordId,summary}` | `{recordId,uploadedAt,uploadedBy}` |
@@ -132,7 +133,9 @@ API อยู่ same origin ใช้ cookie ที่ login แล้ว JSON 
 | `PUT /api/admin/settings` | admin | study fields ห้าตัว | `{study,source:'saved'}` |
 | `DELETE /api/admin/settings` | admin | ไม่มี | `{study,source:'environment'}` |
 
-ไม่มี endpoint สำหรับ role assignment, create staff, change password, delete account, upload/download raw EEG หรือ server-summary delete
+แอดมินสร้างบัญชีใหม่และเลือก role เป็น `user`, `researcher` หรือ `admin` ผ่าน `POST /api/dashboard/users` ได้ โดยต้องยืนยันอีเมลและรหัสผ่านของแอดมินที่เข้าสู่ระบบทุกครั้ง ไม่ขึ้นกับ `REGISTRATION_ENABLED` ตรวจ origin และขนาด JSON สูงสุด 16 KiB จำกัดการยืนยัน 10 ครั้งต่อนาทีต่อแอดมิน รหัสผ่านบัญชีใหม่มี 8–200 ตัวอักษร เก็บเฉพาะ password hash และไม่บันทึกข้อมูลยืนยันแอดมิน ข้อผิดพลาดรวม `invalid_admin_credentials` (403), `email_taken` (409), `invalid_role` (400) และ `rate_limited` (429 พร้อม `Retry-After`)
+
+ไม่มี endpoint สำหรับเปลี่ยน role บัญชีเดิม, change password, delete account, upload/download raw EEG หรือ server-summary delete
 
 ### Managed user response
 
