@@ -7,12 +7,13 @@ import DashboardUsers from "@/app/components/DashboardUsers";
 import AdminPanel from "@/app/components/AdminPanel";
 import DashboardIcon from "@/app/components/DashboardIcon";
 import WorkspacePageHeading from "@/app/components/WorkspacePageHeading";
+import PreliminaryAssessment from "@/app/components/assessment/PreliminaryAssessment";
 import {
   LINE_WINDOW_SAMPLES,
   summarizeEegWindow,
 } from "@/lib/eeg-signal-quality.mjs";
 import { localizeText, startLocalization } from "@/lib/localization";
-import { MUSE_SERVICE, createMuseEegClient, museConnectionMessage } from "@/lib/muse/eeg-client.mjs";
+import { MUSE_SERVICE, createMuseEegClient, museConnectionMessage, museConnectionDetails, formatMuseConnectionDetails } from "@/lib/muse/eeg-client.mjs";
 
 const AUTH_ERRORS = {
   invalid_email: "รูปแบบอีเมลไม่ถูกต้อง / Invalid email address",
@@ -293,6 +294,7 @@ export default function Home() {
   useEffect(() => {
     const $ = (id) => document.getElementById(id);
     const getEl = (id) => document.getElementById(id);
+    let museEffectActive = true;
 
     /* ---------- Legacy demo EEG helpers (guarded) ---------- */
     function drawEEG(seed = 0) {
@@ -1453,11 +1455,12 @@ export default function Home() {
       b.textContent = "Preparing Muse…";
       try {
         await loadMuseDriver();
-        if (museConnectionBusy) return;
+        if (!museEffectActive || museConnectionBusy) return;
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
         setMuseStatus("Ready / พร้อมเชื่อมต่อ");
       } catch (e) {
+        if (!museEffectActive) return;
         b.disabled = false;
         b.textContent = "Retry Muse setup / ลองเตรียมใหม่";
         setMuseStatus(
@@ -1524,10 +1527,13 @@ export default function Home() {
       });
     }
     async function connectMuseDevice(device, quiet = false, ownsConnectionLock = false) {
+      if (!museEffectActive) return;
       if ((museConnectionBusy || museConnected) && !ownsConnectionLock) return;
       museConnectionBusy = true;
       const b = getEl("connectMuseBtn");
       const label = device?.name || "Muse";
+      let connectionStage = "driver";
+      let connectingClient = null;
       resetStages();
       setStage("found");
       try {
@@ -1536,14 +1542,23 @@ export default function Home() {
         if (!quiet)
           setMuseStatus("Connecting to " + label + "… / กำลังเชื่อมต่อ");
         if (!museModuleReady) museModuleReady = await loadMuseDriver();
-        museClient = new museModuleReady.MuseClient();
+        if (!museEffectActive) return;
+        connectingClient = new museModuleReady.MuseClient();
+        museClient = connectingClient;
         museDevice = device;
-        await museClient.connect(device.gatt, { onStage: (stage) => {
+        connectionStage = "gatt";
+        await connectingClient.connect(device.gatt, { onStage: (stage) => {
+          if (!museEffectActive) return;
+          connectionStage = stage === "gatt" ? "service" : "eeg";
           setStage(stage);
           setMuseStatus(stage === "gatt"
             ? "2/4 เชื่อมต่อ Bluetooth แล้ว กำลังค้นหา Muse Service / Bluetooth connected; discovering Muse service"
             : "3/4 พบ Muse Service แล้ว กำลังเปิดช่อง EEG / Muse service found; enabling EEG channels");
         } });
+        if (!museEffectActive) {
+          connectingClient.disconnect();
+          return;
+        }
         try {
           localStorage.setItem("museLastDeviceId", device.id);
         } catch (e) {}
@@ -1553,7 +1568,12 @@ export default function Home() {
         );
 
         subscribeEeg();
-        await museClient.start();
+        connectionStage = "start";
+        await connectingClient.start();
+        if (!museEffectActive) {
+          connectingClient.disconnect();
+          return;
+        }
         if (!device.gatt.connected) throw Object.assign(new Error("Headset disconnected during EEG startup"), { museStage: "gatt" });
         if (!window.__museReady)
           setMuseStatus("4/4 เริ่ม EEG แล้ว กำลังรอข้อมูล / EEG started; waiting for data");
@@ -1563,20 +1583,23 @@ export default function Home() {
         getEl("stopBaselineBtn").disabled = true;
         b.textContent = label + " Connected / เชื่อมต่อแล้ว";
       } catch (err) {
+        if (!museEffectActive) {
+          try { connectingClient?.disconnect(); } catch {}
+          return;
+        }
         museConnected = false;
         setMuseConnected(false);
         b.disabled = false;
         b.textContent = "Connect Muse / เชื่อมต่อ Muse";
-        console.error("Muse connection failed", { device: label, stage: err?.museStage || "start", error: err });
+        const details = museConnectionDetails(err, label, connectionStage);
+        const description = formatMuseConnectionDetails(details);
+        // A handled device failure should stay in the connection UI, rather
+        // than opening Next's console-error overlay during auto-reconnect.
+        console.warn(`Muse ${quiet ? "auto-reconnect" : "connection"} failed\n${description}`);
         device.removeEventListener("gattserverdisconnected", onMuseDisconnected);
-        setMuseStatus(museConnectionMessage(err, label), true);
+        setMuseStatus(museConnectionMessage(details, label), true);
         getEl("museErrorDetails").style.display = "block";
-        getEl("museErrorText").textContent = [
-          `Device: ${label}`,
-          `Stage: ${err?.museStage || "start"}`,
-          err?.museUuid ? `UUID: ${err.museUuid}` : null,
-          `${err?.name || "Error"}: ${err?.message || String(err)}`,
-        ].filter(Boolean).join("\n");
+        getEl("museErrorText").textContent = description;
         try {
           if (eegSub) eegSub.unsubscribe();
         } catch (e) {}
@@ -1799,7 +1822,7 @@ export default function Home() {
     prepareMuse();
     (async () => {
       const devices = await listKnownMuseDevices();
-      if (!devices.length) return;
+      if (!museEffectActive || !devices.length) return;
       let lastId = null;
       try {
         lastId = localStorage.getItem("museLastDeviceId");
@@ -1896,6 +1919,7 @@ export default function Home() {
     });
 
     return () => {
+      museEffectActive = false;
       cancelAnimationFrame(rafId);
       clearTimeout(baselineTimer);
       clearTimeout(baselineHardStop);
@@ -2308,6 +2332,7 @@ export default function Home() {
               ["dashboard", "grid", "แดชบอร์ด", "Dashboard"],
               ["journey", "flask", "ห้องทดลอง EEG", "EEG experiment"],
               ["games", "game", "ภารกิจการรู้คิด", "Cognitive tasks"],
+              ["cogscreen", "book", "แบบคัดกรองเบื้องต้น", "Preliminary screening"],
               ["history", "clock", "ประวัติแบบประเมิน", "Assessment history"],
             ].map(([sec, icon, th, en]) => (
               <button
@@ -3119,7 +3144,7 @@ export default function Home() {
             </section>
 
             {/* ---------- Cognitive screening ---------- */}
-            <section id="cogscreen">
+            <section id="cogscreen" className={activeSection === "cogscreen" ? "active" : ""}>
               <WorkspacePageHeading
                 locale={locale}
                 icon="book"
@@ -3130,10 +3155,18 @@ export default function Home() {
                 }
                 description={
                   locale === "th"
-                    ? "บันทึกคะแนนจากแบบประเมินที่ได้รับอนุญาตและเชื่อมโยงกับข้อมูลวิจัย"
-                    : "Record authorized screening scores and link them with research data."
+                    ? "พิจารณาการเปลี่ยนแปลงจากความสามารถเดิมทีละข้อ"
+                    : "Consider changes from previous ability, one question at a time."
                 }
               />
+              <PreliminaryAssessment
+                key={accountEmail || "signed-out"}
+                locale={locale}
+                enabled={authed === true && activeSection === "cogscreen"}
+                onHome={() => call("showSection", "dashboard")}
+              />
+              <details className="study-legacy">
+                <summary>{locale === "th" ? "เครื่องมือประเมินเดิมสำหรับการวิจัย" : "Existing research assessment tools"}</summary>
               <div className="card">
                 <p>
                   <b>
@@ -3186,6 +3219,7 @@ export default function Home() {
                   game score as a diagnosis of Alzheimer’s disease.
                 </p>
               </div>
+              </details>
             </section>
 
             {/* ---------- Games ---------- */}

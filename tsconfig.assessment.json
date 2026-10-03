@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "ES2020",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["react", "node"]
+  },
+  "include": [
+    "lib/assessment.mjs",
+    "app/components/assessment/*.js",
+    "app/components/assessment/*.d.ts"
+  ]
+}

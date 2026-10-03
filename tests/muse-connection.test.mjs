@@ -1,10 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { createMuseEegClient, decodeMuseEegPacket, MUSE_SERVICE, MUSE_CONTROL, MUSE_EEG_CHARACTERISTICS, museConnectionMessage } from '../lib/muse/eeg-client.mjs';
+import { createMuseEegClient, decodeMuseEegPacket, MUSE_SERVICE, MUSE_CONTROL, MUSE_EEG_CHARACTERISTICS, museConnectionMessage, museConnectionDetails, formatMuseConnectionDetails } from '../lib/muse/eeg-client.mjs';
 
 const { MuseClient } = createRequire(import.meta.url)('muse-jsx');
 const Client = createMuseEegClient(MuseClient, { wait: async () => {} });
+
+test('connection diagnostics preserve DOMException properties and serialize without an empty error object', () => {
+  const error = new DOMException('Connection attempt failed.', 'NetworkError');
+  assert.equal(JSON.stringify(error), '{}');
+  const details = museConnectionDetails(error, 'MuseS-test', 'gatt');
+  assert.deepEqual(JSON.parse(JSON.stringify(details)), {
+    device: 'MuseS-test', stage: 'gatt', uuid: null, name: 'NetworkError', message: 'Connection attempt failed.',
+  });
+  assert.equal(formatMuseConnectionDetails(details), 'Device: MuseS-test\nStage: gatt\nNetworkError: Connection attempt failed.');
+  const wrapped = Object.assign(new Error('Service unavailable', { cause: error }), { museStage: 'service', museUuid: MUSE_SERVICE });
+  assert.match(formatMuseConnectionDetails(museConnectionDetails(wrapped)), new RegExp(`UUID: ${MUSE_SERVICE}`));
+  assert.equal(museConnectionDetails('Driver unavailable', 'Muse', 'driver').message, 'Driver unavailable');
+  assert.doesNotMatch(museConnectionDetails({}).message, /\[object Object\]/);
+});
+
+test('startup NetworkError is distinguished from a GATT connection failure', () => {
+  const error = new DOMException('Write failed', 'NetworkError');
+  assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'gatt')), /Bluetooth connection failed/);
+  assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'start')), /EEG startup failed/);
+  assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'driver')), /Muse driver load failed/);
+});
 const notFound = () => new DOMException('No matching service or characteristic', 'NotFoundError');
 function packet(index = 65535) {
   const bytes = new Uint8Array(24);

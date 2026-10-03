@@ -5,7 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "eslint app lib tests next.config.mjs playwright.config.mjs eslint.config.mjs",
+    "lint:assessment": "eslint app/components/assessment lib/assessment.mjs tests/assessment.test.mjs tests/browser/assessment.spec.mjs playwright.config.mjs eslint.config.mjs",
+    "typecheck": "tsc -p tsconfig.assessment.json",
+    "test": "node --test tests/*.test.mjs",
+    "test:assessment": "node --test tests/assessment.test.mjs",
+    "test:browser": "node node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -13,5 +19,14 @@
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.5",
+    "typescript": "^6.0.3"
   }
 }
