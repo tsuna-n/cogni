@@ -28,6 +28,7 @@ async function openAssessment(page) {
       },
     }),
   );
+  await page.route("**/api/forms", (route) => route.fulfill({ json: route.request().method() === 'GET' ? { forms: {} } : { saved: true } }));
   await page.goto("/");
   if (page.viewportSize().width <= 850)
     await page
@@ -264,6 +265,7 @@ for (const width of [320, 375, 390, 768, 1440]) {
     await screen
       .getByRole("button", { name: "ยืนยันและดูผล", exact: true })
       .click();
+    await expect(screen.getByRole("heading", { name: "ผลการคัดกรองเบื้องต้น", exact: true })).toBeVisible();
     await checkLayout();
     await page.screenshot({
       path: `test-results/assessment-${width}.png`,

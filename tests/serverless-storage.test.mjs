@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { neonConfig } from "@neondatabase/serverless";
+import { readUserForms, saveUserForm, confirmScreening } from "../lib/forms/store.js";
 import { getDatabase } from "../lib/server-database.js";
 import { createUser, findUser, recordLogin, listManagedUsers, updateManagedUser } from "../lib/auth/store.js";
 import { normalizeUserProfile } from "../lib/auth/user-profile.mjs";
@@ -25,26 +26,35 @@ test("serverless storage uses parameterized Neon queries for accounts, summaries
   const records = new Map();
   const settings = new Map();
   const rateBuckets = new Map();
+  const forms = new Map();
+  let participantNumber = 0;
   const queries = [];
   process.env.DATABASE_URL = "postgresql://test:test@fake.neon.tech/test?sslmode=require";
   process.env.VERCEL = "1";
   neonConfig.fetchFunction = async (_url, options) => {
-    const { query, params } = JSON.parse(options.body);
+    const payload = JSON.parse(options.body);
+    if (payload.queries) {
+      const results = [];
+      for (const query of payload.queries) results.push(await (await neonConfig.fetchFunction(_url, { ...options, body: JSON.stringify(query) })).json());
+      return Response.json({ results });
+    }
+    const { query, params } = payload;
     queries.push({ query, params });
+    if (query.startsWith("SELECT pg_advisory_xact_lock") || query.startsWith("WITH numbered")) return result();
     if (query.startsWith("CREATE ") || query.startsWith("ALTER TABLE ")) return result();
     if (query.startsWith("INSERT INTO cogniload_users")) {
       const [email, name, password_hash, created_at, role] = params;
       if (users.has(email)) return result(["email"]);
-      users.set(email, { email, name, password_hash, created_at, role, login_count: 0, last_login_at: null });
+      users.set(email, { email, name, password_hash, created_at, role, participant_number: ++participantNumber, login_count: 0, last_login_at: null });
       return result(["email"], [[email]]);
     }
     if (query.startsWith("SELECT * FROM cogniload_users")) {
       const row = users.get(params[0]);
-      const names = ["email", "name", "password_hash", "created_at", "login_count", "last_login_at", "role"];
-      return result(names, row ? [names.map((name) => row[name])] : [], [25, 25, 25, 25, 23, 25]);
+      const names = ["email", "name", "password_hash", "created_at", "login_count", "last_login_at", "role", "participant_number", "profile"];
+      return result(names, row ? [names.map((name) => (name === "profile" ? JSON.stringify(row.profile || {}) : row[name]))] : [], [25, 25, 25, 25, 23, 25, 25, 20, 3802]);
     }
-    const profileNames = ["email", "name", "role", "created_at", "login_count", "last_login_at", "profile", "profile_updated_at", "profile_updated_by"];
-    const profileResult = (rows) => result(profileNames, rows.map((row) => profileNames.map((key) => key === "profile" ? JSON.stringify(row.profile || {}) : row[key] ?? null)), [25, 25, 25, 25, 23, 25, 3802, 25, 25]);
+    const profileNames = ["email", "name", "role", "created_at", "login_count", "last_login_at", "profile", "profile_updated_at", "profile_updated_by", "participant_number"];
+    const profileResult = (rows) => result(profileNames, rows.map((row) => profileNames.map((key) => key === "profile" ? JSON.stringify(row.profile || {}) : row[key] ?? null)), [25, 25, 25, 25, 23, 25, 3802, 25, 25, 20]);
     if (query.startsWith("SELECT email, name, role")) return profileResult([...users.values()]);
     if (query.startsWith("UPDATE cogniload_users SET name")) {
       const [name, profile, updatedAt, editor, email, revision] = params;
@@ -55,11 +65,26 @@ test("serverless storage uses parameterized Neon queries for accounts, summaries
     }
     if (query.startsWith("UPDATE cogniload_users")) {
       const row = users.get(params[1]);
-      const names = ["email", "name", "password_hash", "created_at", "login_count", "last_login_at", "role"];
+      const names = ["email", "name", "password_hash", "created_at", "login_count", "last_login_at", "role", "participant_number", "profile"];
       if (!row) return result(names);
       row.login_count++;
       row.last_login_at = params[0];
       return result(names, [names.map((name) => row[name])], [25, 25, 25, 25, 23, 25]);
+    }
+    if (query.startsWith("SELECT form_key, value")) {
+      const entries = [...forms.entries()].filter(([key]) => key.startsWith(params[0] + ':')).map(([key, value]) => [key.slice(params[0].length + 1), JSON.stringify(value)]);
+      return result(['form_key', 'value'], entries, [25, 3802]);
+    }
+    if (query.startsWith("INSERT INTO cogniload_user_forms")) {
+      if (query.includes("'screeningHistory'")) {
+        const [email, value] = params;
+        const key = email + ':screeningHistory';
+        forms.set(key, { ...JSON.parse(value), ...forms.get(key) });
+        return result(['value'], [[JSON.stringify(forms.get(key))]], [3802]);
+      }
+      const [email, key, value] = params;
+      forms.set(email + ':' + key, JSON.parse(value));
+      return result();
     }
     if (query.startsWith("INSERT INTO cogniload_research_records")) {
       const [recordId, participantId, uploadedBy, uploadedAt, summary] = params;
@@ -99,6 +124,16 @@ test("serverless storage uses parameterized Neon queries for accounts, summaries
     assert.equal((await createUser(user)).ok, false);
     assert.equal((await findUser(email)).passwordHash, "hashed");
     assert.equal((await findUser(email)).role, "user");
+    assert.equal((await findUser(email)).participantId, 'P001');
+    await saveUserForm(email, 'setup', { participant: 'P001', sessionId: 'S01' });
+    await saveUserForm(email, 'workspace', { fields: { age: '68' } });
+    const screening = { id: 'screen-1', acknowledged: true, respondent: 'self', answers: Array(8).fill('unchanged') };
+    const first = await confirmScreening(email, screening, 'P001');
+    const repeated = await confirmScreening(email, screening, 'P001');
+    assert.deepEqual(repeated, first);
+    assert.equal(Object.keys((await readUserForms(email)).screeningHistory).length, 1);
+    assert.deepEqual((await readUserForms(email)).workspace.fields, { age: '68' });
+    assert.deepEqual(await readUserForms('other@example.org'), {});
     await createUser({ ...user, email: "researcher@example.org", role: "researcher" });
     assert.equal((await findUser("researcher@example.org")).role, "researcher");
     const admin = { email: "admin@example.org", name: "Admin", passwordHash: "admin-hashed", createdAt: user.createdAt, role: "admin" };
@@ -133,7 +168,7 @@ test("serverless storage uses parameterized Neon queries for accounts, summaries
     assert.equal((await rateLimit(key, 2)).ok, true);
     assert.equal((await rateLimit(key, 2)).ok, true);
     assert.equal((await rateLimit(key, 2)).ok, false);
-    assert.equal(queries.filter(({ query }) => query.startsWith("CREATE ")).length, 5);
+    assert.equal(queries.filter(({ query }) => query.startsWith("CREATE ")).length, 8);
     const roleUpgrade = queries.find(({ query }) => query.includes("DROP CONSTRAINT IF EXISTS cogniload_users_role_check"));
     assert.match(roleUpgrade.query, /role IN \('user', 'researcher', 'admin'\)/);
     assert.match(roleUpgrade.query, /ALTER COLUMN role SET DEFAULT 'user'/);

@@ -60,6 +60,7 @@ async function mockMuse(page, stage) {
     localStorage.setItem("museLastDeviceId", device.id);
     localStorage.setItem("cogni_locale", "th");
   }, stage);
+  await page.route("**/api/forms", (route) => route.fulfill({ json: { forms: {} } }));
   await page.route("**/api/auth/me", (route) =>
     route.fulfill({
       json: {

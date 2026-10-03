@@ -18,6 +18,7 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
   await page.addInitScript(() => localStorage.setItem("cogni_locale", "th"));
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === "/api/forms") return route.fulfill({ json: { forms: {} } });
     if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "admin@example.test", name: "Admin", role } } });
     if (path === "/api/config") return route.fulfill({ json: { registrationEnabled: false, study } });
     if (path === "/api/dashboard/users") return route.fulfill(failDashboard ? { status: 503, json: { error: "storage_unavailable" } } : { json: { users } });
@@ -101,6 +102,7 @@ test("researchers cannot open admin settings and mobile layout stays within the 
 });
 
 test("failed dashboard fetch does not show zero counts as successful data", async ({ page }) => {
+  await page.route("**/api/forms", (route) => route.fulfill({ json: { forms: {} } }));
   await page.route("**/api/auth/me", (route) => route.fulfill({ json: { user: { email: "admin@example.test", role: "admin" } } }));
   await page.route("**/api/config", (route) => route.fulfill({ json: { study: null } }));
   await page.route("**/api/dashboard/users", (route) => route.fulfill({ status: 503, json: { error: "storage_unavailable" } }));

@@ -28,6 +28,7 @@ export async function POST(request) {
 async function saveSummary(request) {
   const { user, response } = await authorizeUser();
   if (response) return response;
+  if (user.screeningRequired) return Response.json({ error: 'screening_required' }, { status: 403 });
   const origin = request.headers.get("origin");
   if (origin) {
     let source;
@@ -42,6 +43,7 @@ async function saveSummary(request) {
     const raw = await request.text();
     if (raw.length > 16_384) return Response.json({ error: "invalid_body" }, { status: 413 });
     submission = normalizeResearchSubmission(JSON.parse(raw));
+    if (user.role === 'user' && !submission.summary.testMode && submission.participantId !== user.participantId) return Response.json({ error: 'invalid_participant' }, { status: 403 });
   } catch (error) {
     if (error instanceof ResearchValidationError || error instanceof SyntaxError) return Response.json({ error: "invalid_body", detail: error.message }, { status: 400 });
     throw error;

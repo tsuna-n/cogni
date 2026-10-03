@@ -102,6 +102,7 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
 
   await t.test("anonymous requests cannot read or write private data", async () => {
     for (const [endpoint, method] of [
+      ["/api/forms", "GET"], ["/api/forms", "PUT"], ["/api/forms", "POST"],
       ["/api/research/summaries", "GET"], ["/api/research/summaries", "POST"],
       ["/api/admin/participants", "GET"], ["/api/admin/participants/P001", "GET"],
       ["/api/admin/settings", "GET"], ["/api/admin/settings", "PUT"], ["/api/admin/settings", "DELETE"],
@@ -318,6 +319,45 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
       assert.ok(Date.parse(signedIn.lastLoginAt) >= loginStarted);
       assert.ok(Date.parse(signedIn.lastLoginAt) <= Date.now());
     }
+  });
+  await t.test("first screening, sequential participant IDs and every saved form persist per account", async () => {
+    const me = (await request('/api/auth/me', { cookie: userCookie })).data.user;
+    assert.equal(me.screeningRequired, true);
+    assert.match(me.participantId, /^P[0-9]+$/);
+    assert.equal((await request('/api/research/summaries', { cookie: userCookie, method: 'POST', body: { recordId: randomUUID(), summary } })).data.error, 'screening_required');
+    const draft = { stage: 'review', index: 7, acknowledged: true, editing: false, respondent: 'self', answers: Array(8).fill('unchanged'), result: null };
+    assert.equal((await request('/api/forms', { cookie: userCookie, method: 'PUT', body: { key: 'screeningDraft', value: draft } })).response.status, 200);
+    assert.equal((await request('/api/auth/me', { cookie: userCookie })).data.user.screeningRequired, true);
+    assert.equal((await request('/api/forms', { cookie: userCookie, method: 'PUT', body: { key: 'screeningHistory', value: { forged: true } } })).response.status, 400);
+    assert.equal((await request('/api/forms', { cookie: userCookie, method: 'POST', body: { id: 'incomplete', acknowledged: true, respondent: 'self', answers: [] } })).response.status, 400);
+    const screening = { id: 'screening-1', acknowledged: true, respondent: 'self', answers: draft.answers };
+    const saved = await request('/api/forms', { cookie: userCookie, method: 'POST', body: screening });
+    assert.equal(saved.response.status, 200);
+    assert.equal(saved.data.screening.participantId, me.participantId);
+    assert.deepEqual((await request('/api/forms', { cookie: userCookie, method: 'POST', body: screening })).data.screening, saved.data.screening);
+    assert.equal((await request('/api/auth/me', { cookie: userCookie })).data.user.screeningRequired, false);
+    const setup = { participant: 'FORGED', sessionId: 'S02', studyGroup: 'control', condition: 'comparison', taskSeconds: 90, consent: true, markerText: 'note', baselineSeconds: 30, postTaskSeconds: 30, protocolVersion: 'pilot' };
+    assert.equal((await request('/api/forms', { cookie: userCookie, method: 'PUT', body: { key: 'setup', value: setup } })).response.status, 200);
+    const workspace = { fields: { age: '68', miniCogDate: '2026-10-03', notes: 'Follow up' }, journey: { step: 2, profile: { id: me.participantId, age: 68 }, games: [] }, history: [] };
+    assert.equal((await request('/api/forms', { cookie: userCookie, method: 'PUT', body: { key: 'workspace', value: workspace } })).response.status, 200);
+    const relogin = await request('/api/auth/login', { method: 'POST', body: { email: me.email, password }, headers: { 'x-forwarded-for': '192.0.2.11' } });
+    const cookie = relogin.response.headers.get('set-cookie').split(';')[0];
+    const restored = (await request('/api/forms?email=bob@example.test', { cookie })).data.forms;
+    assert.deepEqual(restored.workspace, workspace);
+    assert.equal(restored.setup.participant, me.participantId);
+    assert.equal(restored.setup.condition, 'comparison');
+    assert.equal(Object.keys(restored.screeningHistory).length, 1);
+    assert.deepEqual((await request('/api/forms?email=user@example.test', { cookie: bobCookie })).data.forms, {});
+    for (const method of ['PUT', 'POST']) assert.equal((await request('/api/forms', { cookie, method, body: method === 'POST' ? screening : { key: 'setup', value: setup }, headers: { origin: 'https://attacker.example' } })).response.status, 403);
+    assert.equal((await request('/api/forms', { cookie, method: 'PUT', body: { key: 'workspace', value: workspace, email: 'bob@example.test' } })).response.status, 400);
+    const ownSummary = { ...summary, participant: me.participantId };
+    assert.equal((await request('/api/research/summaries', { cookie, method: 'POST', body: { recordId: randomUUID(), summary: ownSummary } })).response.status, 200);
+    assert.equal((await request('/api/research/summaries', { cookie, method: 'POST', body: { recordId: randomUUID(), summary } })).response.status, 403);
+    const users = (await request('/api/dashboard/users', { cookie: adminCookie })).data.users;
+    assert.equal(users.find((user) => user.email === me.email).forms.screeningHistory['screening-1'].participantId, me.participantId);
+    const ids = users.map((user) => user.participantId);
+    assert.equal(new Set(ids).size, ids.length);
+    assert.deepEqual(ids, [...ids].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
   });
   await t.test("database role assignments take effect on existing ordinary user sessions", async () => {
     const email = "signup-admin@example.test";

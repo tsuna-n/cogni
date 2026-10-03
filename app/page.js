@@ -8,6 +8,8 @@ import AdminPanel from "@/app/components/AdminPanel";
 import DashboardIcon from "@/app/components/DashboardIcon";
 import WorkspacePageHeading from "@/app/components/WorkspacePageHeading";
 import PreliminaryAssessment from "@/app/components/assessment/PreliminaryAssessment";
+import SavedForms from "@/app/components/SavedForms";
+import { initializeForms, queueWorkspaceSave, getWorkspaceForm, flushForms, hasUnsavedForms } from "@/app/components/formPersistence";
 import {
   LINE_WINDOW_SAMPLES,
   summarizeEegWindow,
@@ -51,6 +53,9 @@ export default function Home() {
   const [account, setAccount] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
   const [accountRole, setAccountRole] = useState("user");
+  const [accountData, setAccountData] = useState(null);
+  const [accountForms, setAccountForms] = useState({});
+  const [formSaveStatus, setFormSaveStatus] = useState('saved');
   const [isAdmin, setIsAdmin] = useState(false);
   const canManageUserData = authed === true && (accountRole === "admin" || accountRole === "researcher");
   const [mode, setMode] = useState("login");
@@ -66,6 +71,65 @@ export default function Home() {
   const [configError, setConfigError] = useState("");
   const alertUser = (message) =>
     window.alert(localizeText(message, localeRef.current));
+
+  useEffect(() => {
+    const update = (event) => setFormSaveStatus(event.detail);
+    const online = () => { flushForms().catch(() => {}); };
+    const warn = (event) => { if (hasUnsavedForms()) { event.preventDefault(); event.returnValue = ''; } };
+    const leaving = () => { flushForms({ keepalive: true }).catch(() => {}); };
+    window.addEventListener('forms-save-status', update);
+    window.addEventListener('online', online);
+    window.addEventListener('beforeunload', warn);
+    window.addEventListener('pagehide', leaving);
+    return () => {
+      window.removeEventListener('forms-save-status', update); window.removeEventListener('online', online);
+      window.removeEventListener('beforeunload', warn); window.removeEventListener('pagehide', leaving);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!accountEmail || authed !== true) return;
+    // Persist the legacy participant, MMSE, Mini-Cog and game input forms too.
+    // React forms and staff editors use their own validated APIs.
+    const sections = ['participant', 'cogscreen', 'journey', 'games', 'preprocess', 'features'];
+    const fields = { ...(getWorkspaceForm().fields || {}) };
+    const fieldKey = (element) => {
+      const section = element.closest('main > section');
+      if (!section || !sections.includes(section.id) || element.readOnly || element.closest('[data-persist-own]') || ['file', 'password', 'button', 'submit'].includes(element.type)) return null;
+      const container = element.closest('#stepbox, #gamebox, #jgarea');
+      const prefix = container?.id || section.id;
+      const inputs = [...(container || section).querySelectorAll('input, select, textarea')].filter((input) => !input.closest('[data-persist-own]'));
+      return `${prefix}:${element.id || element.name || inputs.indexOf(element)}`;
+    };
+    const restore = () => document.querySelectorAll('main input, main select, main textarea').forEach((element) => {
+      const key = fieldKey(element);
+      if (key && Object.hasOwn(fields, key)) {
+        if (element.type === 'checkbox' || element.type === 'radio') element.checked = fields[key];
+        else element.value = fields[key];
+      }
+    });
+    document.querySelectorAll('main input, main select, main textarea').forEach((element) => {
+      const key = fieldKey(element);
+      if (!key || Object.hasOwn(fields, key)) return;
+      if (element.type === 'checkbox' || element.type === 'radio') element.checked = element.defaultChecked;
+      else if (element.tagName === 'SELECT') element.value = [...element.options].find((option) => option.defaultSelected)?.value || element.options[0]?.value || '';
+      else element.value = element.defaultValue;
+    });
+    restore();
+    const observer = new MutationObserver(restore);
+    observer.observe(document.querySelector('main'), { childList: true, subtree: true });
+    const save = (event) => {
+      const element = event.target;
+      if (!element.matches?.('input, select, textarea')) return;
+      const key = fieldKey(element);
+      if (!key) return;
+      fields[key] = ['checkbox', 'radio'].includes(element.type) ? element.checked : element.value;
+      queueWorkspaceSave(accountEmail, { fields });
+    };
+    document.addEventListener('input', save);
+    document.addEventListener('change', save);
+    return () => { observer.disconnect(); document.removeEventListener('input', save); document.removeEventListener('change', save); };
+  }, [accountEmail, authed]);
 
   useEffect(() => { setDashboardView("overview"); }, [accountEmail]);
 
@@ -627,7 +691,14 @@ export default function Home() {
     /* ---------- Auth / journey ---------- */
     let journey = { step: 1, profile: {}, screen: null, games: [] };
 
-    function initApp(accountEmail, displayName, recordLoginEvent) {
+    function initApp(accountEmail, displayName, recordLoginEvent, user, forms) {
+      initializeForms(accountEmail, forms);
+      setAccountData(user);
+      setAccountForms(forms);
+      window.__participantId = user.participantId;
+      window.__screeningRequired = user.screeningRequired;
+      if (forms.workspace?.journey) localStorage.setItem("cogni_progress_" + accountEmail, JSON.stringify(forms.workspace.journey));
+      if (forms.workspace?.history) localStorage.setItem("cogni_assessments_" + accountEmail, JSON.stringify(forms.workspace.history));
       const e = String(accountEmail || "").toLowerCase();
       if (!e) return;
       sessionStorage.setItem("cogni_login", e);
@@ -649,6 +720,9 @@ export default function Home() {
           journey = JSON.parse(saved);
         } catch {}
       }
+      if (!forms.workspace && (saved || localStorage.getItem('cogni_assessments_' + e))) {
+        queueWorkspaceSave(e, { journey, history: JSON.parse(localStorage.getItem('cogni_assessments_' + e) || '[]') });
+      }
       showStep();
       renderDashboard();
       renderHistory();
@@ -659,7 +733,9 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           if (data?.user?.email) {
-            initApp(data.user.email, data.user.name, false);
+            const formsResponse = await fetch("/api/forms", { cache: "no-store" });
+            if (!formsResponse.ok) throw new Error("Cannot load saved forms");
+            initApp(data.user.email, data.user.name, false, data.user, (await formsResponse.json()).forms);
             setAccount(String(data.user.name || data.user.email));
             setAccountEmail(data.user.email);
             setAccountRole(data.user.role);
@@ -683,6 +759,10 @@ export default function Home() {
         )
       )
         return;
+      try { await flushForms(); } catch {
+        alertUser("บันทึกข้อมูลไม่สำเร็จ กรุณาลองบันทึกอีกครั้งก่อนออกจากระบบ / Saving failed. Retry saving before signing out.");
+        return;
+      }
       if (museConnected) await disconnectMuse();
       try {
         await fetch("/api/auth/logout", { method: "POST" });
@@ -693,6 +773,10 @@ export default function Home() {
       setAccount("");
       setAccountEmail("");
       setAccountRole("user");
+      setAccountData(null);
+      setAccountForms({});
+      window.__screeningRequired = false;
+      initializeForms("", {});
       setIsAdmin(false);
       setAuthed(false);
     }
@@ -702,7 +786,9 @@ export default function Home() {
         if (!response.ok) return false;
         const { user } = await response.json();
         if (!user?.email) return false;
-        initApp(user.email, user.name, fresh);
+        const formsResponse = await fetch("/api/forms", { cache: "no-store" });
+        if (!formsResponse.ok) return false;
+        initApp(user.email, user.name, fresh, user, (await formsResponse.json()).forms);
         showSection("dashboard");
         setAccount(String(user.name || user.email));
         setAccountEmail(user.email);
@@ -719,6 +805,7 @@ export default function Home() {
       let e = sessionStorage.getItem("cogni_login");
       if (e)
         localStorage.setItem("cogni_progress_" + e, JSON.stringify(journey));
+      if (e) queueWorkspaceSave(e, { journey, history: JSON.parse(localStorage.getItem("cogni_assessments_" + e) || "[]") });
       if ($("dMember")) renderDashboard();
     }
     function nextStep() {
@@ -740,7 +827,7 @@ export default function Home() {
       let b = $("stepbox");
       if (!b) return;
       if (journey.step === 1)
-        b.innerHTML = `<h3>Step 1: Participant Profile / ข้อมูลผู้เข้าร่วม</h3><div class="formgrid"><label>Participant ID<input id="jpId" value="P001"></label><label>Age / อายุ<input id="jpAge" type="number"></label><label>Dominant hand / มือข้างถนัด<select id="jpHand"><option>Right</option><option>Left</option></select></label><label>Session<input id="jpSession" value="S01"></label></div><div class="controls"><button onclick="saveProfile()">Continue / ต่อไป</button></div>`;
+        b.innerHTML = `<h3>Step 1: Participant Profile / ข้อมูลผู้เข้าร่วม</h3><div class="formgrid"><label>Participant ID<input id="jpId" value="${window.__participantId || ""}" readonly></label><label>Age / อายุ<input id="jpAge" type="number"></label><label>Dominant hand / มือข้างถนัด<select id="jpHand"><option value="Right">Right</option><option value="Left">Left</option></select></label><label>Session<input id="jpSession" value="S01"></label></div><div class="controls"><button onclick="saveProfile()">Continue / ต่อไป</button></div>`;
       else if (journey.step === 2) b.innerHTML = mmseForm();
       else if (journey.step >= 3 && journey.step <= 5) {
         let g = journey.step - 2,
@@ -1849,6 +1936,7 @@ export default function Home() {
 
     /* ---------- Section navigation ---------- */
     function showSection(id) {
+      if (window.__screeningRequired) id = "cogscreen";
       if (window.__studyPhase === "task" && id !== "games") {
         window.dispatchEvent(new Event("research-task-screen-left"));
         return;
@@ -2427,6 +2515,12 @@ export default function Home() {
             </div>
           </nav>
           <main>
+            {authed === true && (
+              <div className="notice" role="status" data-no-translate>
+                {formSaveStatus === "error" ? (locale === "th" ? "บันทึกข้อมูลไม่สำเร็จ ข้อมูลที่แก้ไขยังรอบันทึก" : "Saving failed. Your changes are pending.") : formSaveStatus === "pending" ? (locale === "th" ? "กำลังบันทึกข้อมูล…" : "Saving changes…") : (locale === "th" ? "ข้อมูลแบบฟอร์มบันทึกแล้ว" : "Form changes saved")}
+                {formSaveStatus === "error" && <button type="button" onClick={() => flushForms().catch(() => {})}>{locale === "th" ? "ลองบันทึกอีกครั้ง" : "Retry save"}</button>}
+              </div>
+            )}
             {/* ---------- Journey ---------- */}
             <section
               id="journey"
@@ -2448,6 +2542,8 @@ export default function Home() {
                 locale={locale}
                 enabled={authed === true}
                 accountEmail={accountEmail}
+                accountData={accountData}
+                initialSetup={accountForms.setup}
                 isAdmin={isAdmin}
                 studyConfig={appConfig?.study}
                 configError={configError}
@@ -2898,35 +2994,35 @@ export default function Home() {
                 <div className="formgrid">
                   <label>
                     Anonymous Participant ID
-                    <input defaultValue="P001" />
+                    <input value={accountData?.participantId || ""} readOnly />
                   </label>
                   <label>
                     Age
-                    <input type="number" defaultValue="18" />
+                    <input name="age" type="number" defaultValue="18" />
                   </label>
                   <label>
                     Sex
-                    <select defaultValue="Moderate workload">
-                      <option>Prefer not to say</option>
-                      <option>Female</option>
-                      <option>Male</option>
+                    <select name="sex" defaultValue="Prefer not to say">
+                      <option value="Prefer not to say">Prefer not to say</option>
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
                     </select>
                   </label>
                   <label>
                     Task condition
-                    <select defaultValue="Moderate workload">
-                      <option>Low workload</option>
-                      <option>Moderate workload</option>
-                      <option>High workload</option>
+                    <select name="taskCondition" defaultValue="Moderate workload">
+                      <option value="Low workload">Low workload</option>
+                      <option value="Moderate workload">Moderate workload</option>
+                      <option value="High workload">High workload</option>
                     </select>
                   </label>
                   <label>
                     Session
-                    <input defaultValue="S01" />
+                    <input name="sessionId" defaultValue="S01" />
                   </label>
                   <label>
                     Sampling rate (Hz)
-                    <input type="number" defaultValue="256" />
+                    <input name="sampleRate" type="number" defaultValue="256" />
                   </label>
                 </div>
               </div>
@@ -3163,8 +3259,15 @@ export default function Home() {
                     : "Consider changes from previous ability, one question at a time."
                 }
               />
+              {accountData?.screeningRequired && <p className="notice">{locale === "th" ? "กรุณาทำแบบคัดกรองเบื้องต้นให้ครบและยืนยันคำตอบก่อนเริ่มใช้งาน" : "Complete and confirm your preliminary screening before continuing."}</p>}
               <PreliminaryAssessment
                 key={accountEmail || "signed-out"}
+                accountEmail={accountEmail}
+                initialState={accountForms.screeningDraft}
+                onComplete={() => {
+                  window.__screeningRequired = false;
+                  setAccountData((current) => ({ ...current, screeningRequired: false }));
+                }}
                 locale={locale}
                 enabled={authed === true && activeSection === "cogscreen"}
                 onHome={() => call("showSection", "dashboard")}
@@ -3202,7 +3305,7 @@ export default function Home() {
                   </label>
                   <label>
                     Assessment date / วันที่ประเมิน
-                    <input type="date" />
+                    <input id="mcdate" type="date" />
                   </label>
                 </div>
                 <div className="controls">
@@ -3418,6 +3521,7 @@ export default function Home() {
                 }
                 badge={locale === "th" ? "ข้อมูลบัญชีนี้" : "Your account"}
               />
+              <SavedForms key={accountEmail} locale={locale} enabled={authed === true && activeSection === 'history'} />
               <div className="card">
                 <p className="muted">
                   ประวัติผลการประเมินของสมาชิกที่เข้าสู่ระบบ

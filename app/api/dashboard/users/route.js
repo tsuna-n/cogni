@@ -3,6 +3,7 @@ import { createUser, findUser, isStorageError, listManagedUsers } from "@/lib/au
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { rateLimit } from "@/lib/auth/rate-limit";
 import { isAdminUser } from "@/lib/auth/roles.mjs";
+import { readUserForms } from "@/lib/forms/store";
 
 export const runtime = "nodejs";
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { ...privateResponseHeaders, ...headers } });
@@ -48,7 +49,7 @@ export async function POST(request) {
     };
     const result = await createUser({ ...user, passwordHash: await hashPassword(body.password) });
     if (!result.ok) return json({ error: "email_taken" }, 409);
-    return json({ user }, 201);
+    return json({ user: { ...user, participantId: (await findUser(email)).participantId } }, 201);
   } catch (error) {
     if (error instanceof SyntaxError) return json({ error: "invalid_body" }, 400);
     if (isStorageError(error)) return json({ error: "storage_unavailable" }, 503);
@@ -60,7 +61,8 @@ export async function GET() {
   try {
     const { response } = await authorizeUser({ manageUsers: true });
     if (response) return response;
-    return Response.json({ users: await listManagedUsers() }, { headers: privateResponseHeaders });
+    const users = await listManagedUsers();
+    return Response.json({ users: await Promise.all(users.map(async (user) => ({ ...user, forms: await readUserForms(user.email) }))) }, { headers: privateResponseHeaders });
   } catch (error) {
     if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503, headers: privateResponseHeaders });
     throw error;

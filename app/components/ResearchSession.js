@@ -23,6 +23,7 @@ import {
   saveResearchSummary,
 } from "./researchStorage";
 import { localizeText } from "@/lib/localization";
+import { queueFormSave, flushForms, queueWorkspaceSave, getWorkspaceForm } from './formPersistence';
 import {
   isOwnedResearchSession,
   isUnassignedResearchSession,
@@ -62,28 +63,30 @@ export default function ResearchSession({
   locale = "th",
   enabled = false,
   accountEmail = "",
+  accountData = null,
+  initialSetup = null,
   isAdmin = false,
   studyConfig = null,
   configError = "",
 }) {
-  const [participant, setParticipant] = useState("");
-  const [sessionId, setSessionId] = useState("S01");
-  const [studyGroup, setStudyGroup] = useState("");
+  const [participant, setParticipant] = useState(accountData?.role === 'user' ? accountData.participantId : initialSetup?.participant || accountData?.participantId || "");
+  const [sessionId, setSessionId] = useState(initialSetup?.sessionId ?? "S01");
+  const [studyGroup, setStudyGroup] = useState(initialSetup?.studyGroup ?? accountData?.profile?.studyGroup ?? "");
   const [gameId, setGameId] = useState(1);
   const [sequence, setSequence] = useState(null);
   const [sequenceHost, setSequenceHost] = useState(null);
   const [recordSaved, setRecordSaved] = useState(false);
   const startingRef = useRef(false);
-  const [condition, setCondition] = useState("standard");
-  const [taskSeconds, setTaskSeconds] = useState(60);
-  const [consent, setConsent] = useState(false);
+  const [condition, setCondition] = useState(initialSetup?.condition ?? "standard");
+  const [taskSeconds, setTaskSeconds] = useState(initialSetup?.taskSeconds ?? studyConfig?.defaultTaskSeconds ?? 60);
+  const [consent, setConsent] = useState(initialSetup?.consent ?? false);
   const [ready, setReady] = useState(false);
   const [liveRailPercents, setLiveRailPercents] = useState([0, 0, 0, 0]);
   const [status, setStatus] = useState("idle");
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [clock, setClock] = useState(0);
   const [, setViewTick] = useState(0);
-  const [markerText, setMarkerText] = useState("");
+  const [markerText, setMarkerText] = useState(initialSetup?.markerText ?? "");
   const [message, setMessage] = useState("");
   const [exported, setExported] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -111,6 +114,12 @@ export default function ResearchSession({
   const previousDefaultTaskRef = useRef(null);
 
   useEffect(() => {
+    if (!accountEmail || !studyConfig) return;
+    queueFormSave(accountEmail, 'setup', { participant, sessionId, studyGroup, condition, taskSeconds, consent, markerText,
+      baselineSeconds: studyConfig.baselineSeconds, postTaskSeconds: studyConfig.postTaskSeconds, protocolVersion: studyConfig.protocolVersion });
+  }, [accountEmail, studyConfig, status, participant, sessionId, studyGroup, condition, taskSeconds, consent, markerText]);
+
+  useEffect(() => {
     setSequenceHost(document.getElementById("gameSequenceControls"));
   }, []);
 
@@ -130,7 +139,7 @@ export default function ResearchSession({
 
   useEffect(() => {
     if (!studyConfig || status !== "idle") return;
-    if (previousDefaultTaskRef.current !== studyConfig.defaultTaskSeconds)
+    if (previousDefaultTaskRef.current !== studyConfig.defaultTaskSeconds && !(previousDefaultTaskRef.current === null && initialSetup?.taskSeconds != null))
       setTaskSeconds(studyConfig.defaultTaskSeconds);
     else
       setTaskSeconds((current) =>
@@ -139,7 +148,7 @@ export default function ResearchSession({
           : current,
       );
     previousDefaultTaskRef.current = studyConfig.defaultTaskSeconds;
-  }, [studyConfig?.defaultTaskSeconds, studyConfig?.maxTaskSeconds, status]);
+  }, [studyConfig, initialSetup?.taskSeconds, status]);
 
   function snapshot(data) {
     const { rows, nextSequence, lastIndices, ...saved } = data;
@@ -217,7 +226,7 @@ export default function ResearchSession({
           dataRef.current = recovered;
           setStatus(recovered.status);
           setParticipant(
-            recovered.participant === "TEST" ? "" : recovered.participant || "",
+            accountData?.role === 'user' ? accountData.participantId : recovered.participant === "TEST" ? initialSetup?.participant || accountData?.participantId || "" : recovered.participant || "",
           );
           setSessionId(
             recovered.sequenceBaseSessionId || recovered.sessionId || "S01",
@@ -720,6 +729,14 @@ export default function ResearchSession({
               ? "กำลังโหลดการตั้งค่าการทดลอง กรุณารอสักครู่"
               : "Loading study settings. Please wait."),
         );
+        return;
+      }
+      if (accountData?.screeningRequired) {
+        setMessage('กรุณาทำแบบคัดกรองเบื้องต้นก่อนเริ่มทดลอง / Complete preliminary screening first.');
+        return;
+      }
+      try { await flushForms(); } catch {
+        setMessage('บันทึกการตั้งค่าไม่สำเร็จ กรุณาลองบันทึกอีกครั้ง / Could not save setup. Please retry.');
         return;
       }
       let currentStudy;
@@ -1226,7 +1243,7 @@ export default function ResearchSession({
       {sequenceHost &&
         sequenceControls &&
         createPortal(sequenceControls, sequenceHost)}
-      <div className="study-workspace">
+      <div className="study-workspace" data-persist-own>
         {sequenceControls}
         <div className="card study-card">
           <div className="study-heading">
@@ -1248,6 +1265,7 @@ export default function ResearchSession({
                 onChange={(e) => setParticipant(e.target.value)}
                 placeholder="เช่น P001"
                 maxLength={40}
+                readOnly={accountData?.role === 'user'}
                 disabled={status !== "idle"}
               />
             </label>
@@ -1487,6 +1505,10 @@ export default function ResearchSession({
                   const label = markerText.trim();
                   if (label) {
                     addMarker(label);
+                    const record = dataRef.current;
+                    queueWorkspaceSave(accountEmail, { markers: [...(getWorkspaceForm().markers || []), {
+                      label, timestamp: Date.now(), recordId: record.id, participant: record.participant, sessionId: record.sessionId,
+                    }] });
                     setMarkerText("");
                     setViewTick((n) => n + 1);
                   }

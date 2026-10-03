@@ -9,6 +9,7 @@ import { filterOverviewUsers } from "@/lib/dashboard/user-overview.mjs";
 import DashboardUserEditor from "./DashboardUserEditor";
 import DashboardUserCreator from "./DashboardUserCreator";
 import Icon from "./DashboardIcon";
+import SavedForms from './SavedForms';
 
 function userDraft(user) {
   const p = user.profile;
@@ -16,7 +17,7 @@ function userDraft(user) {
     name: user.name || "",
     expectedUpdatedAt: user.profileUpdatedAt,
     profile: {
-      participantId: p.participantId || "", age: p.age ?? "", hand: p.hand || "",
+      participantId: user.participantId || p.participantId || "", age: p.age ?? "", hand: p.hand || "",
       sessionId: p.sessionId || "", studyGroup: p.studyGroup || "",
       education: p.education || "", notes: p.notes || "",
       mmseScores: MMSE_DOMAINS.map((_, index) => p.mmseScores?.[index] ?? null),
@@ -143,7 +144,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error);
-      setUsers((current) => current.map((user) => user.email === data.user.email ? data.user : user));
+      setUsers((current) => current.map((user) => user.email === data.user.email ? { ...user, ...data.user } : user));
       setDraft(userDraft(data.user)); setDirty(false);
       setUpdatedAt(new Date());
       setMessage(t("บันทึกข้อมูลผู้ใช้แล้ว", "User details saved."));
@@ -230,14 +231,14 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
     <div role="tabpanel" id="dashboard-panel-users" aria-labelledby="dashboard-tab-users" className="dashboard-users-grid" hidden={view !== "users"}>
       <aside className="card dashboard-user-list" aria-label={t("รายชื่อผู้ใช้", "User list")}>
         <div className="dashboard-list-heading"><h2>{t("รายชื่อผู้ใช้", "User directory")}</h2><span>{filtered.length}</span></div>
-        <ul>{listed.map((user) => <li key={user.email}><button type="button" className={`dashboard-user-row${selectedEmail === user.email ? " selected" : ""}`} aria-pressed={selectedEmail === user.email} disabled={saving} onClick={() => openProfile(user)}><strong>{user.name || user.email}</strong><span>{user.email}</span><small>{roleLabel(user.role)}{user.profile.participantId ? ` · ${user.profile.participantId}` : ""}</small></button></li>)}</ul>
+        <ul>{listed.map((user) => <li key={user.email}><button type="button" className={`dashboard-user-row${selectedEmail === user.email ? " selected" : ""}`} aria-pressed={selectedEmail === user.email} disabled={saving} onClick={() => openProfile(user)}><strong>{user.name || user.email}</strong><span>{user.email}</span><small>{roleLabel(user.role)}{(user.participantId || user.profile.participantId) ? ` · ${user.participantId || user.profile.participantId}` : ""}</small></button></li>)}</ul>
         {!loading && !filtered.length && <div className="dashboard-directory-empty"><Icon name="users" size={25} /><p>{t("ไม่พบผู้ใช้ตามตัวกรอง", "No matching users")}</p><button type="button" className="dash-text-link" onClick={resetFilters}>{t("ล้างตัวกรอง", "Clear filters")}</button></div>}
         <div className="dashboard-list-pagination"><button type="button" className="secondary" aria-label={t("หน้าก่อนหน้า", "Previous page")} disabled={currentPage === 0 || saving} onClick={() => setPage(currentPage - 1)}><Icon name="chevron" size={14} /></button><span>{currentPage + 1} / {pageCount}</span><button type="button" className="secondary" aria-label={t("หน้าถัดไป", "Next page")} disabled={currentPage + 1 === pageCount || saving} onClick={() => setPage(currentPage + 1)}><Icon name="chevron" size={14} /></button></div>
       </aside>
-      <div className="card dashboard-user-details">{creating && accountRole === "admin" ? <DashboardUserCreator locale={locale} adminEmail={accountEmail} saving={saving} onBusyChange={setSaving} onCreated={created} onCancel={() => setCreating(false)} /> : draft && selected ? <DashboardUserEditor key={selected.email} user={selected} draft={draft} locale={locale} saving={saving} dirty={dirty} onChange={change} onSave={save} onReset={resetDraft} /> : <div className="dashboard-panel-empty"><span className="dashboard-empty-icon"><Icon name="users" size={32} /></span><h2>{t("เลือกผู้ใช้เพื่อเริ่มจัดการ", "Select a user to get started")}</h2><p>{t("ดูข้อมูลผู้เข้าร่วม กรอกคะแนน MMSE และบันทึกหมายเหตุจากแผงนี้", "Review participant details, enter MMSE scores, and save notes here.")}</p></div>}</div>
+      <div className="card dashboard-user-details">{creating && accountRole === "admin" ? <DashboardUserCreator locale={locale} adminEmail={accountEmail} saving={saving} onBusyChange={setSaving} onCreated={created} onCancel={() => setCreating(false)} /> : draft && selected ? <><DashboardUserEditor key={selected.email} user={selected} draft={draft} locale={locale} saving={saving} dirty={dirty} onChange={change} onSave={save} onReset={resetDraft} /><SavedForms locale={locale} forms={selected.forms || {}} /></> : <div className="dashboard-panel-empty"><span className="dashboard-empty-icon"><Icon name="users" size={32} /></span><h2>{t("เลือกผู้ใช้เพื่อเริ่มจัดการ", "Select a user to get started")}</h2><p>{t("ดูข้อมูลผู้เข้าร่วม กรอกคะแนน MMSE และบันทึกหมายเหตุจากแผงนี้", "Review participant details, enter MMSE scores, and save notes here.")}</p></div>}</div>
     </div>
     <div role="tabpanel" id="dashboard-panel-summaries" aria-labelledby="dashboard-tab-summaries" hidden={view !== "summaries"}>
-      <div className="dashboard-results-toolbar"><div><h2>{t("ผลสรุปการทดลอง", "Session summaries")}</h2><p className="muted">{sessions.length} {t("รอบที่ซิงก์แล้ว", "synced sessions")}</p></div><label>{t("บัญชี / ผู้เข้าร่วม", "Account / participant")}<select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}><option value="">{t("ทุกบัญชี", "All accounts")}</option>{users.map((user) => <option key={user.email} value={user.email}>{user.name || user.email}{user.profile.participantId ? ` · ${user.profile.participantId}` : ""}</option>)}</select></label></div>
+      <div className="dashboard-results-toolbar"><div><h2>{t("ผลสรุปการทดลอง", "Session summaries")}</h2><p className="muted">{sessions.length} {t("รอบที่ซิงก์แล้ว", "synced sessions")}</p></div><label>{t("บัญชี / ผู้เข้าร่วม", "Account / participant")}<select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}><option value="">{t("ทุกบัญชี", "All accounts")}</option>{users.map((user) => <option key={user.email} value={user.email}>{user.name || user.email}{(user.participantId || user.profile.participantId) ? ` · ${user.participantId || user.profile.participantId}` : ""}</option>)}</select></label></div>
       <ResearchHistory sessions={sessions} locale={locale} loading={loading} source="server" />
     </div>
   </div>;

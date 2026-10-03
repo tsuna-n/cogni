@@ -66,8 +66,8 @@ function RespondentSummary({ respondent, t }) {
   );
 }
 
-/** @param {StepProps} props */
-export function AssessmentReview({ state, dispatch, t }) {
+/** @param {StepProps & { saving?: boolean }} props */
+export function AssessmentReview({ state, dispatch, t, saving = false }) {
   return (
     <>
       <p>
@@ -85,7 +85,7 @@ export function AssessmentReview({ state, dispatch, t }) {
       <div className={styles.actions}>
         <button
           type="button"
-          disabled={!state.respondent || !allAnswered(state.answers)}
+          disabled={saving || !state.respondent || !allAnswered(state.answers)}
           onClick={() => dispatch({ type: "confirm" })}
         >
           {t("ยืนยันและดูผล", "Confirm and view results")}

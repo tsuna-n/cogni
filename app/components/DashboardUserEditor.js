@@ -18,7 +18,7 @@ export default function DashboardUserEditor({ user, draft, locale, saving, dirty
     <fieldset disabled={saving} className="dashboard-user-fields">
       <legend>{t("ข้อมูลผู้เข้าร่วม", "Participant details")}</legend>
       <label>{t("ชื่อ", "Name")}<input name="name" maxLength={80} value={draft.name} onChange={(event) => onChange("name", event.target.value)} /></label>
-      <label>{t("รหัสผู้เข้าร่วม", "Participant ID")}<input name="participantId" maxLength={40} value={draft.profile.participantId} onChange={(event) => onChange("participantId", event.target.value)} /></label>
+      <label>{t("รหัสผู้เข้าร่วม", "Participant ID")}<input name="participantId" readOnly={Boolean(user.participantId)} maxLength={40} value={draft.profile.participantId} onChange={(event) => onChange("participantId", event.target.value)} /></label>
       <label>{t("อายุ", "Age")}<input name="age" type="number" min={10} max={120} step={1} value={draft.profile.age} onChange={(event) => onChange("age", event.target.value)} /></label>
       <label>{t("มือข้างถนัด", "Dominant hand")}<select name="hand" value={draft.profile.hand} onChange={(event) => onChange("hand", event.target.value)}><option value="">{t("ยังไม่ระบุ", "Not specified")}</option><option value="Right">{t("ขวา", "Right")}</option><option value="Left">{t("ซ้าย", "Left")}</option></select></label>
       <label>{t("รหัสรอบ", "Session ID")}<input name="sessionId" maxLength={40} value={draft.profile.sessionId} onChange={(event) => onChange("sessionId", event.target.value)} /></label>
