@@ -14,7 +14,7 @@ const records = [
   { recordId: "test", participantId: "TEST", summary: { sessionId: "CHECK", studyGroup: "device_test", testMode: true, status: "complete", startedMs: 1780000020000 } },
 ];
 
-async function mockDashboard(page, { role = "admin", failSettings = false, failDashboard = false } = {}) {
+async function mockDashboard(page, { role = "admin", failSettings = false, failDashboard = false, dashboardUsers = users } = {}) {
   let study = { baselineSeconds: 30, postTaskSeconds: 30, maxTaskSeconds: 540, defaultTaskSeconds: 60, protocolVersion: "test_protocol" };
   let source = "environment";
   const writes = [];
@@ -24,7 +24,7 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
     if (path === "/api/forms") return route.fulfill({ json: { forms: {} } });
     if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "admin@example.test", name: "Admin", role } } });
     if (path === "/api/config") return route.fulfill({ json: { registrationEnabled: false, study } });
-    if (path === "/api/dashboard/users") return route.fulfill(failDashboard ? { status: 503, json: { error: "storage_unavailable" } } : { json: { users } });
+    if (path === "/api/dashboard/users") return route.fulfill(failDashboard ? { status: 503, json: { error: "storage_unavailable" } } : { json: { users: dashboardUsers } });
     if (path === "/api/research/summaries") return route.fulfill({ json: { records } });
     if (path === "/api/admin/settings") {
       if (role !== "admin") return route.fulfill({ status: 403, json: { error: "forbidden" } });
@@ -128,6 +128,24 @@ test("task averages show their sample counts while unassessed MMSE remains blank
   await expect(performance).toContainText("20 คำตอบ");
   await expect(performance).toContainText("ใช้แทนผลประเมิน MMSE ไม่ได้");
   await expect(page.locator('[name="mmse-0"]')).toHaveValue("");
+});
+
+test("mock basic information displays saved ages and groups with a visible simulation label", async ({ page }) => {
+  const mock = { ...users[1], profile: { ...users[1].profile, education: "primary", mmseScores: [5, 5, 3, 4, 2, 6, 2, 1], notes: "MOCK DATA — ข้อมูลสมมติสำหรับทดสอบระบบ" } };
+  await mockDashboard(page, { dashboardUsers: [users[0], mock] });
+  await page.getByRole("combobox", { name: "กรองประเภทบัญชี" }).selectOption("user");
+  await expect(page.getByRole("note")).toContainText("ข้อมูลพื้นฐานรวมโปรไฟล์สมมติ");
+  await expect(page.getByRole("img", { name: "ผู้ป่วย: 0, กลุ่มควบคุม: 1, ยังไม่ระบุกลุ่ม: 0" })).toBeVisible();
+  await expect(page.locator(".user-overview-chart").filter({ hasText: "ช่วงอายุผู้ใช้" })).toContainText("ยังไม่มีข้อมูลอายุ: 0 บัญชี");
+  const row = page.locator(".user-overview-table tbody tr");
+  await expect(row).toContainText("โปรไฟล์สมมติ");
+  await expect(row.locator("td").nth(2)).toHaveText("กลุ่มควบคุม");
+  await expect(row.locator("td").nth(3)).toHaveText("54");
+  await expect(row.locator("td").nth(4)).toHaveText("ข้อมูลสมมติ");
+  await page.getByRole("button", { name: "กลุ่มควบคุม 1", exact: true }).click();
+  await expect(row).toHaveCount(1);
+  await page.getByRole("combobox", { name: "กรองกลุ่มทดลอง" }).selectOption("unassigned");
+  await expect(row).toHaveCount(0);
 });
 
 test("ordinary users see saved task averages update after a successful sync", async ({ page }) => {

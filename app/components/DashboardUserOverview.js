@@ -44,6 +44,7 @@ export default function DashboardUserOverview({ users, totalUsers, loading, loca
         ["pulse", t("ประเมิน MMSE ครบ", "Completed MMSE"), count(summary.assessed.length), `${t("ยังไม่ครบหรือยังไม่กรอก", "Incomplete or unassessed")}: ${count(summary.assessmentsMissing)}`],
       ].map(([icon, label, value, note]) => <div className="dash-panel dash-stat" key={icon}><span className="dash-stat-icon blue"><Icon name={icon} size={23} /></span><div><small className="dash-stat-label">{label}</small><strong className="dash-stat-value">{value}</strong><p className="dash-stat-note">{note}</p></div></div>)}
     </div>}
+    {summary.simulatedCount > 0 && <p className="dashboard-source-note" role="note">{t("ข้อมูลพื้นฐานรวมโปรไฟล์สมมติสำหรับทดสอบระบบ", "Basic information includes simulated profiles for testing")}: {count(summary.simulatedCount)} {t("บัญชี · อายุ การศึกษา และกลุ่มทดลองในภาพรวมนี้มีข้อมูลสมมติรวมอยู่ด้วย", "accounts · age, education and study group summaries include simulated data.")}</p>}
     <div className="user-overview-charts">
       <div className="card user-overview-chart"><h3>{t("สัดส่วนกลุ่มทดลอง", "Study groups")}</h3><p className="muted">{t("เลือกกลุ่มเพื่อกรองรายชื่อผู้ใช้", "Select a group to filter the user list.")}</p>
         {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-group-chart">
@@ -57,7 +58,7 @@ export default function DashboardUserOverview({ users, totalUsers, loading, loca
     </div>
     <details className="card dashboard-assessment-details">
       <summary><span><Icon name="book" size={19} />{t("การศึกษาและผลประเมิน MMSE", "Education and MMSE assessments")}</span><small>{count(summary.assessed.length)} {t("บัญชีประเมินครบ", "completed assessments")}</small></summary>
-      <p className="dashboard-source-note">{t("ผลส่วนนี้ใช้ข้อมูลการศึกษาและคะแนนที่บันทึกในโปรไฟล์ผู้ใช้ ยกเว้นโปรไฟล์ที่ระบุว่าเป็นข้อมูลสมมติ", "These results use education and scores saved in user profiles, excluding profiles marked as simulated.")}</p>
+      <p className="dashboard-source-note">{t("ระดับการศึกษารวมข้อมูลสมมติที่บันทึกไว้ ส่วนผล MMSE แสดงเฉพาะโปรไฟล์ที่ไม่ได้ระบุว่าเป็นข้อมูลสมมติ", "Education includes saved simulated data. MMSE results only include profiles not marked as simulated.")}</p>
       <div className="user-overview-charts">
       <div className="user-overview-chart"><h3>{t("ระดับการศึกษา", "Education")}</h3><p className="muted">{t("จำนวนบัญชีในแต่ละระดับการศึกษา", "Account counts by education level.")}</p>
         {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-overview-bars">{Object.entries(summary.education).map(([key, value]) => <div className="user-overview-bar-row" key={key}><span>{educationLabels[key]}</span><div className="user-overview-bar-track"><i style={{ width: `${100 * value / maxEducation}%` }} /></div><strong>{number(value)}</strong></div>)}</div>}
@@ -73,7 +74,7 @@ export default function DashboardUserOverview({ users, totalUsers, loading, loca
       {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-overview-table-scroll"><table><caption className="dashboard-sr-only">{t("ผู้ใช้ตามตัวกรอง", "Users matching the current filters")}</caption><thead><tr><th>{t("ผู้ใช้ / อีเมล", "User / email")}</th><th>{t("รหัสผู้เข้าร่วม", "Participant ID")}</th><th>{t("กลุ่ม", "Group")}</th><th>{t("อายุ", "Age")}</th><th>MMSE</th><th>{t("ภารกิจเฉลี่ย (%)", "Mean task accuracy (%)")}</th><th>{t("ข้อมูล", "Details")}</th></tr></thead><tbody>{users.slice(0, tableLimit).map((user) => {
         const score = assessedByEmail.get(user.email);
         const simulated = hasSimulatedProfile(user.profile);
-        const profile = simulated ? {} : user.profile;
+        const profile = user.profile;
         const age = profile?.age;
         return <tr key={user.email}><td><strong>{user.name || "—"}</strong><br /><span>{user.email}</span>{simulated && <small> · {t("โปรไฟล์สมมติ", "Simulated profile")}</small>}</td><td>{user.participantId || user.profile?.participantId || "—"}</td><td>{groupLabels[profile?.studyGroup] || groupLabels.unassigned}</td><td>{Number.isInteger(age) && age >= 10 && age <= 120 ? number(age) : "—"}</td><td>{simulated ? t("ข้อมูลสมมติ", "Simulated data") : score ? `${score.total} / ${score.max}` : t("ยังไม่ครบ", "Incomplete")}</td><td>{number(user.taskPerformance?.accuracyPercent, 1)}<br /><small>{user.taskPerformance?.sessionCount || 0} {t("รอบ", "sessions")}</small></td><td><button type="button" className="secondary" disabled={disabled} onClick={() => onSelect(user)}>{t("ดู / แก้ไข", "View / edit")}</button></td></tr>;
       })}</tbody></table></div>}

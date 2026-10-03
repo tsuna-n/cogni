@@ -17,7 +17,7 @@ export default function DashboardUserEditor({ user, draft, locale, saving, dirty
       <span className="dashboard-role-badge">{role}</span>
     </div>
     <div className="dashboard-profile-meta"><span>{t("สร้างบัญชี", "Created")} {date(user.createdAt)}</span><span>{t("เข้าใช้งาน", "Sign-ins")}: {user.loginCount}</span><span>{t("ล่าสุด", "Last sign-in")}: {date(user.lastLoginAt)}</span></div>
-    {simulated && <p className="dashboard-profile-meta" role="note">{t("ข้อมูลโปรไฟล์สมมติสำหรับทดสอบระบบ · ไม่นับในสถิติอายุ กลุ่ม การศึกษา และผล MMSE จริง", "Simulated profile for testing · excluded from age, group, education and actual MMSE statistics.")}</p>}
+    {simulated && <p className="dashboard-profile-meta" role="note">{t("ข้อมูลโปรไฟล์สมมติสำหรับทดสอบระบบ · รวมในภาพรวมข้อมูลพื้นฐาน แต่ไม่นับเป็นผล MMSE จริง", "Simulated profile for testing · included in basic information summaries, excluded from actual MMSE results.")}</p>}
     <fieldset disabled={saving} className="dashboard-user-fields">
       <legend>{t("ข้อมูลผู้เข้าร่วม", "Participant details")}</legend>
       <label>{t("ชื่อ", "Name")}<input name="name" maxLength={80} value={draft.name} onChange={(event) => onChange("name", event.target.value)} /></label>
