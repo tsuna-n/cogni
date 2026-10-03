@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MMSE_DOMAINS } from "@/lib/auth/user-profile.mjs";
 import ResearchHistory from "./ResearchHistory";
 import DashboardUserOverview from "./DashboardUserOverview";
+import DashboardResearchOverview from "./DashboardResearchOverview";
 import { filterOverviewUsers } from "@/lib/dashboard/user-overview.mjs";
 import DashboardUserEditor from "./DashboardUserEditor";
 import DashboardUserCreator from "./DashboardUserCreator";
@@ -23,7 +24,7 @@ function userDraft(user) {
   };
 }
 
-export default function DashboardUsers({ locale = "th", enabled = false, accountRole = "user", accountEmail = "", search = "", view = "overview", onViewChange, onClearSearch }) {
+export default function DashboardUsers({ locale = "th", enabled = false, accountRole = "user", accountEmail = "", search = "", view = "overview", onViewChange, onClearSearch, studyConfig, configError, onOpenSettings, onOpenExperiment }) {
   const t = (th, en) => locale === "th" ? th : en;
   const [users, setUsers] = useState([]);
   const [records, setRecords] = useState([]);
@@ -220,7 +221,11 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
       <span className="dashboard-filter-count" role="status">{loading ? "…" : filtered.length} {t("บัญชี", "accounts")}</span>
     </div>}
     <div role="tabpanel" id="dashboard-panel-overview" aria-labelledby="dashboard-tab-overview" hidden={view !== "overview"}>
-      {error && !users.length && !loading ? <div className="card dashboard-panel-empty"><Icon name="info" size={32} /><h2>{t("ยังโหลดภาพรวมไม่ได้", "Overview unavailable")}</h2><p>{t("กดรีเฟรชเพื่อลองอีกครั้ง", "Refresh to try again.")}</p></div> : <DashboardUserOverview users={filtered} totalUsers={users.length} loading={loading} locale={locale} role={overviewRole} group={overviewGroup} onRoleChange={setOverviewRole} onGroupChange={setOverviewGroup} onSelect={openProfile} onShowAll={() => onViewChange("users")} showHeader={false} disabled={saving} />}
+      {error && !users.length && !loading ? <div className="card dashboard-panel-empty"><Icon name="info" size={32} /><h2>{t("ยังโหลดภาพรวมไม่ได้", "Overview unavailable")}</h2><p>{t("กดรีเฟรชเพื่อลองอีกครั้ง", "Refresh to try again.")}</p></div> : <>
+        <DashboardResearchOverview users={users} records={records} loading={loading} locale={locale} studyConfig={studyConfig} configError={configError} onShowSummaries={() => { setRecordScope(""); onViewChange("summaries"); }} onOpenSettings={accountRole === "admin" ? onOpenSettings : undefined} onOpenExperiment={onOpenExperiment} onSelectUser={openProfile} onShowUsers={() => { resetFilters(); onViewChange("users"); }} />
+        <div className="dashboard-profile-section-heading"><h2>{t("ข้อมูลจากโปรไฟล์ผู้ใช้", "Saved user profiles")}</h2><p>{t("ตัวกรองด้านบนใช้กับโปรไฟล์ในส่วนนี้", "The filters above apply to the profiles below.")}</p></div>
+        <DashboardUserOverview users={filtered} totalUsers={users.length} loading={loading} locale={locale} role={overviewRole} group={overviewGroup} onRoleChange={setOverviewRole} onGroupChange={setOverviewGroup} onSelect={openProfile} onShowAll={() => onViewChange("users")} showHeader={false} showStats={false} disabled={saving} />
+      </>}
     </div>
     <div role="tabpanel" id="dashboard-panel-users" aria-labelledby="dashboard-tab-users" className="dashboard-users-grid" hidden={view !== "users"}>
       <aside className="card dashboard-user-list" aria-label={t("รายชื่อผู้ใช้", "User list")}>

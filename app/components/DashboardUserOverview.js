@@ -3,7 +3,7 @@
 import { userOverview } from "@/lib/dashboard/user-overview.mjs";
 import Icon from "./DashboardIcon";
 
-export default function DashboardUserOverview({ users, totalUsers, loading, locale = "th", role, group, onRoleChange, onGroupChange, onSelect, onShowAll, disabled = false, showHeader = true, tableLimit = 6 }) {
+export default function DashboardUserOverview({ users, totalUsers, loading, locale = "th", role, group, onRoleChange, onGroupChange, onSelect, onShowAll, disabled = false, showHeader = true, showStats = true, tableLimit = 6 }) {
   const t = (th, en) => locale === "th" ? th : en;
   const summary = userOverview(users);
   const number = (value, digits = 0) => value == null ? "—" : value.toLocaleString(locale === "th" ? "th-TH" : "en-US", { maximumFractionDigits: digits });
@@ -35,14 +35,14 @@ export default function DashboardUserOverview({ users, totalUsers, loading, loca
         </select></label>
       </div>
     </div>}
-    <div className="dash-stats user-overview-stats" aria-live="polite">
+    {showStats && <div className="dash-stats user-overview-stats" aria-live="polite">
       {[
         ["users", t("บัญชีตามตัวกรอง", "Matching accounts"), count(summary.count), `${t("จากทั้งหมด", "Of")} ${count(totalUsers)} ${t("บัญชี", "accounts")}`],
         ["flask", t("มีรหัสผู้เข้าร่วม", "Participant profiles"), count(summary.participants), t("บัญชีที่ระบุรหัสผู้เข้าร่วมแล้ว", "Accounts with a participant ID")],
         ["calendar", t("อายุเฉลี่ย", "Average age"), loading ? "…" : number(summary.averageAge, 1), `${t("จากข้อมูลอายุ", "Based on")} ${count(summary.agesKnown)} ${t("บัญชี", "ages")}`],
         ["pulse", t("ประเมิน MMSE ครบ", "Completed MMSE"), count(summary.assessed.length), `${t("ยังไม่ครบหรือยังไม่กรอก", "Incomplete or unassessed")}: ${count(summary.assessmentsMissing)}`],
       ].map(([icon, label, value, note]) => <div className="dash-panel dash-stat" key={icon}><span className="dash-stat-icon blue"><Icon name={icon} size={23} /></span><div><small className="dash-stat-label">{label}</small><strong className="dash-stat-value">{value}</strong><p className="dash-stat-note">{note}</p></div></div>)}
-    </div>
+    </div>}
     <div className="user-overview-charts">
       <div className="card user-overview-chart"><h3>{t("สัดส่วนกลุ่มทดลอง", "Study groups")}</h3><p className="muted">{t("เลือกกลุ่มเพื่อกรองรายชื่อผู้ใช้", "Select a group to filter the user list.")}</p>
         {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-group-chart">
@@ -53,13 +53,20 @@ export default function DashboardUserOverview({ users, totalUsers, loading, loca
       <div className="card user-overview-chart"><h3>{t("ช่วงอายุผู้ใช้", "User age ranges")}</h3><p className="muted">{t("ยังไม่มีข้อมูลอายุ", "Age not recorded")}: {count(summary.agesMissing)} {t("บัญชี", "accounts")}</p>
         {!summary.agesKnown || loading ? empty(t("ยังไม่มีข้อมูลอายุในกลุ่มที่เลือก", "No ages recorded for the selected users.")) : <div className="user-overview-bars">{summary.ageBands.map((band) => <div className="user-overview-bar-row" key={band.label}><span>{band.label} {t("ปี", "years")}</span><div className="user-overview-bar-track"><i style={{ width: `${100 * band.count / maxAgeCount}%` }} /></div><strong>{number(band.count)}</strong></div>)}</div>}
       </div>
-      <div className="card user-overview-chart"><h3>{t("ระดับการศึกษา", "Education")}</h3><p className="muted">{t("จำนวนบัญชีในแต่ละระดับการศึกษา", "Account counts by education level.")}</p>
+    </div>
+    <details className="card dashboard-assessment-details">
+      <summary><span><Icon name="book" size={19} />{t("การศึกษาและผลประเมิน MMSE", "Education and MMSE assessments")}</span><small>{count(summary.assessed.length)} {t("บัญชีประเมินครบ", "completed assessments")}</small></summary>
+      <p className="dashboard-source-note">{t("ผลส่วนนี้ใช้ข้อมูลการศึกษาและคะแนนที่บันทึกในโปรไฟล์ผู้ใช้", "These results use education and scores saved in user profiles.")}</p>
+      <div className="user-overview-charts">
+      <div className="user-overview-chart"><h3>{t("ระดับการศึกษา", "Education")}</h3><p className="muted">{t("จำนวนบัญชีในแต่ละระดับการศึกษา", "Account counts by education level.")}</p>
         {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-overview-bars">{Object.entries(summary.education).map(([key, value]) => <div className="user-overview-bar-row" key={key}><span>{educationLabels[key]}</span><div className="user-overview-bar-track"><i style={{ width: `${100 * value / maxEducation}%` }} /></div><strong>{number(value)}</strong></div>)}</div>}
       </div>
-      <div className="card user-overview-chart"><h3>{t("คะแนน MMSE รายผู้ใช้", "MMSE by user")}</h3><p className="muted">{t("ร้อยละของคะแนนเต็มตามระดับการศึกษา · ประเมินครบสูงสุด 8 บัญชี", "Percentage of the education-specific maximum · up to 8 completed assessments")}</p>
+      <div className="user-overview-chart"><h3>{t("คะแนน MMSE รายผู้ใช้", "MMSE by user")}</h3><p className="muted">{t("ร้อยละของคะแนนเต็มตามระดับการศึกษา · ประเมินครบสูงสุด 8 บัญชี", "Percentage of the education-specific maximum · up to 8 completed assessments")}</p>
         {!summary.assessed.length || loading ? empty(t("ยังไม่มีผล MMSE ที่ประเมินครบ", "No completed MMSE assessments yet.")) : <div className="user-overview-bars">{summary.assessed.slice(0, 8).map((item) => <button type="button" className="user-overview-bar-row user-mmse-row" key={item.user.email} disabled={disabled} onClick={() => onSelect(item.user)} aria-label={`${item.user.name || item.user.email}: MMSE ${item.total}/${item.max}`}><span>{item.user.profile.participantId || item.user.name || item.user.email}</span><div className="user-overview-bar-track"><i style={{ width: `${item.percent}%` }} /></div><strong>{item.total}/{item.max}</strong></button>)}</div>}
       </div>
-    </div>
+      </div>
+      {onShowAll && <button type="button" className="dash-text-link" disabled={disabled} onClick={onShowAll}>{t("กรอกข้อมูลการศึกษาและ MMSE", "Enter education and MMSE scores")} <Icon name="arrow" size={16} /></button>}
+    </details>
     <div className="user-overview-table">
       <div className="dashboard-table-heading"><h3>{t("ข้อมูลรายผู้ใช้", "Users at a glance")}</h3>{onShowAll && <button type="button" className="dash-text-link" disabled={disabled} onClick={onShowAll}>{t("ดูผู้ใช้ทั้งหมด", "View all users")} <Icon name="arrow" size={16} /></button>}</div>
       {!summary.count || loading ? empty(t("ไม่พบผู้ใช้ตามตัวกรอง", "No users match these filters.")) : <div className="user-overview-table-scroll"><table><caption className="dashboard-sr-only">{t("ผู้ใช้ตามตัวกรอง", "Users matching the current filters")}</caption><thead><tr><th>{t("ผู้ใช้ / อีเมล", "User / email")}</th><th>{t("รหัสผู้เข้าร่วม", "Participant ID")}</th><th>{t("กลุ่ม", "Group")}</th><th>{t("อายุ", "Age")}</th><th>MMSE</th><th>{t("ข้อมูล", "Details")}</th></tr></thead><tbody>{users.slice(0, tableLimit).map((user) => {

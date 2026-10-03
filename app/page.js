@@ -2779,6 +2779,10 @@ export default function Home() {
                 view={dashboardView}
                 onViewChange={setDashboardView}
                 onClearSearch={() => setDashboardSearch("")}
+                studyConfig={appConfig?.study}
+                configError={configError}
+                onOpenSettings={() => call("showSection", "admin")}
+                onOpenExperiment={() => call("showSection", "journey")}
               />
               <div
                 id="dashboard-panel-personal"
