@@ -1,7 +1,7 @@
 import { hashPassword } from "@/lib/auth/password";
 import { clientKey, rateLimit } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
-import { createUser, findUser, isStorageError } from "@/lib/auth/store";
+import { createUser, findUser, isStorageError, recordLogin } from "@/lib/auth/store";
 import { registrationEnabled } from "@/lib/server-config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -62,6 +62,8 @@ async function register(request) {
       return Response.json({ error: "email_taken" }, { status: 409 });
     }
 
+    // Registration signs the user in immediately, so count that first sign-in.
+    await recordLogin(email);
     await createSession(email);
     return Response.json({ user: { email, name: user.name, role: "user" } }, { status: 201 });
   } catch (err) {

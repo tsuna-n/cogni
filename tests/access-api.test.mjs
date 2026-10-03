@@ -280,9 +280,10 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
     const listed = (await request("/api/dashboard/users", { cookie: adminCookie })).data.users;
     assert.equal(listed.find((user) => user.email === "created-researcher@example.test").role, "researcher");
   });
-  await t.test("signup always stores ordinary users despite requested privileged roles", async () => {
+  await t.test("signup records the first sign-in and stores ordinary users despite requested privileged roles", async () => {
     for (const role of ["admin", "researcher"]) {
       const email = `signup-${role}@example.test`;
+      const signupStarted = Date.now();
       const result = await request("/api/auth/register", { method: "POST", body: { email, password, name: "Signup", role, isAdmin: true } });
       assert.equal(result.response.status, 201);
       assert.equal(result.data.user.role, "user");
@@ -292,9 +293,30 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
       assert.deepEqual((await request("/api/research/summaries", { cookie })).data.records, []);
       const stored = JSON.parse(await readFile(usersFile, "utf8"));
       assert.equal(stored[email].role, "user");
+      assert.equal(stored[email].loginCount, 1);
+      assert.ok(Date.parse(stored[email].lastLoginAt) >= signupStarted);
+      assert.ok(Date.parse(stored[email].lastLoginAt) <= Date.now());
+      const listed = (await request("/api/dashboard/users", { cookie: adminCookie })).data.users.find((user) => user.email === email);
+      assert.equal(listed.loginCount, 1);
+      assert.equal(listed.lastLoginAt, stored[email].lastLoginAt);
+      // Restoring the existing session and a duplicate signup are not new sign-ins.
+      assert.equal((await request("/api/auth/me", { cookie })).response.status, 200);
+      assert.equal((await request("/api/auth/register", { method: "POST", body: { email, password } })).response.status, 409);
+      const failed = await request("/api/auth/login", {
+        method: "POST", body: { email, password: "incorrect" }, headers: { "x-forwarded-for": "192.0.2.10" },
+      });
+      assert.equal(failed.response.status, 401);
+      const unchanged = JSON.parse(await readFile(usersFile, "utf8"))[email];
+      assert.equal(unchanged.loginCount, 1);
+      assert.equal(unchanged.lastLoginAt, stored[email].lastLoginAt);
+      const loginStarted = Date.now();
       const relogin = await request("/api/auth/login", { method: "POST", body: { email, password, role: "admin" } });
       assert.equal(relogin.response.status, 200);
       assert.equal(relogin.data.user.role, "user");
+      const signedIn = (await request("/api/dashboard/users", { cookie: adminCookie })).data.users.find((user) => user.email === email);
+      assert.equal(signedIn.loginCount, 2);
+      assert.ok(Date.parse(signedIn.lastLoginAt) >= loginStarted);
+      assert.ok(Date.parse(signedIn.lastLoginAt) <= Date.now());
     }
   });
   await t.test("database role assignments take effect on existing ordinary user sessions", async () => {

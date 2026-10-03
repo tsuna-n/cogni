@@ -23,7 +23,7 @@ Schema ถูกสร้าง/อัปเกรดเมื่อ `getDatabas
 | `password_hash` | TEXT | NOT NULL รูป scrypt ที่แอปตรวจได้ |
 | `role` | TEXT | NOT NULL DEFAULT `user`, CHECK: user/researcher/admin |
 | `created_at` | TEXT | เวลา ISO; nullable ใน schema |
-| `login_count` | INTEGER | NOT NULL DEFAULT 0 จำนวน login ผ่าน API สำเร็จ |
+| `login_count` | INTEGER | NOT NULL DEFAULT 0 จำนวนเข้าสู่ระบบสำเร็จ รวมการเข้าใช้ทันทีหลังสมัครสมาชิก |
 | `last_login_at` | TEXT | เวลา login ล่าสุด nullable |
 | `profile` | JSONB | NOT NULL DEFAULT `{}` ข้อมูลผู้เข้าร่วม/MMSE |
 | `profile_updated_at` | TEXT | ISO revision nullable ก่อนบันทึกโปรไฟล์ |
