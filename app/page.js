@@ -2316,7 +2316,7 @@ export default function Home() {
           >
             <div className="workspace-brand">
               <span className="workspace-brand-mark">
-                <DashboardIcon name="brain" size={28} />
+                <DashboardIcon name="brain" size={24} />
               </span>
               <div>
                 <strong>
@@ -2404,7 +2404,7 @@ export default function Home() {
             )}
             <div className="workspace-sidebar-bottom">
               <div className="workspace-eeg-mark" aria-hidden="true">
-                <DashboardIcon name="pulse" size={35} />
+                <DashboardIcon name="pulse" size={24} />
                 <span>EEG RESEARCH</span>
               </div>
               <strong>
