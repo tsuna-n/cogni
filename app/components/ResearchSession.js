@@ -324,6 +324,7 @@ export default function ResearchSession({
           }
         }
         setSavedSessions(await listResearchSessions());
+        window.dispatchEvent(new Event("research-summaries-synced"));
         if (failures.length) setSyncError(failures.join(" · "));
       } catch (error) {
         setSyncError(error.message);

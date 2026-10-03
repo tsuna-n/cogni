@@ -4,6 +4,8 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { rateLimit } from "@/lib/auth/rate-limit";
 import { isAdminUser } from "@/lib/auth/roles.mjs";
 import { readUserForms } from "@/lib/forms/store";
+import { listResearchRecords } from "@/lib/research/server-store";
+import { taskPerformance } from "@/lib/research/task-performance.mjs";
 
 export const runtime = "nodejs";
 const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { ...privateResponseHeaders, ...headers } });
@@ -59,10 +61,10 @@ export async function POST(request) {
 
 export async function GET() {
   try {
-    const { response } = await authorizeUser({ manageUsers: true });
+    const { user: staff, response } = await authorizeUser({ manageUsers: true });
     if (response) return response;
-    const users = await listManagedUsers();
-    return Response.json({ users: await Promise.all(users.map(async (user) => ({ ...user, forms: await readUserForms(user.email) }))) }, { headers: privateResponseHeaders });
+    const [users, records] = await Promise.all([listManagedUsers(), listResearchRecords(staff)]);
+    return Response.json({ users: await Promise.all(users.map(async (user) => ({ ...user, taskPerformance: taskPerformance(records, user.email), forms: await readUserForms(user.email) }))) }, { headers: privateResponseHeaders });
   } catch (error) {
     if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503, headers: privateResponseHeaders });
     throw error;

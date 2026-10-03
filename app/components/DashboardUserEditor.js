@@ -1,11 +1,13 @@
 "use client";
 
-import { MMSE_DOMAINS, mmseTotal } from "@/lib/auth/user-profile.mjs";
+import { MMSE_DOMAINS, mmseTotal, hasSimulatedProfile } from "@/lib/auth/user-profile.mjs";
 import Icon from "./DashboardIcon";
+import TaskPerformance from "./TaskPerformance";
 
 export default function DashboardUserEditor({ user, draft, locale, saving, dirty, onChange, onSave, onReset }) {
   const t = (th, en) => locale === "th" ? th : en;
   const total = mmseTotal(draft.profile);
+  const simulated = hasSimulatedProfile(draft.profile);
   const date = (value) => value ? new Date(value).toLocaleString(locale === "th" ? "th-TH" : "en-US", { dateStyle: "medium", timeStyle: "short" }) : "—";
   const role = user.role === "admin" ? t("แอดมิน", "Administrator") : user.role === "researcher" ? t("นักวิจัย", "Researcher") : t("ผู้ใช้ทั่วไป", "User");
   return <form onSubmit={onSave} className="dashboard-profile-form">
@@ -15,6 +17,7 @@ export default function DashboardUserEditor({ user, draft, locale, saving, dirty
       <span className="dashboard-role-badge">{role}</span>
     </div>
     <div className="dashboard-profile-meta"><span>{t("สร้างบัญชี", "Created")} {date(user.createdAt)}</span><span>{t("เข้าใช้งาน", "Sign-ins")}: {user.loginCount}</span><span>{t("ล่าสุด", "Last sign-in")}: {date(user.lastLoginAt)}</span></div>
+    {simulated && <p className="dashboard-profile-meta" role="note">{t("ข้อมูลโปรไฟล์สมมติสำหรับทดสอบระบบ · ไม่นับในสถิติอายุ กลุ่ม การศึกษา และผล MMSE จริง", "Simulated profile for testing · excluded from age, group, education and actual MMSE statistics.")}</p>}
     <fieldset disabled={saving} className="dashboard-user-fields">
       <legend>{t("ข้อมูลผู้เข้าร่วม", "Participant details")}</legend>
       <label>{t("ชื่อ", "Name")}<input name="name" maxLength={80} value={draft.name} onChange={(event) => onChange("name", event.target.value)} /></label>
@@ -25,7 +28,7 @@ export default function DashboardUserEditor({ user, draft, locale, saving, dirty
       <label>{t("กลุ่มทดลอง", "Study group")}<select name="studyGroup" value={draft.profile.studyGroup} onChange={(event) => onChange("studyGroup", event.target.value)}><option value="">{t("ยังไม่ระบุ", "Not specified")}</option><option value="patient">{t("ผู้ป่วย", "Patient")}</option><option value="control">{t("กลุ่มควบคุม", "Control")}</option></select></label>
     </fieldset>
     <details className="dashboard-profile-mmse" open={Boolean(draft.profile.education)}>
-      <summary><Icon name="brain" size={19} /><span>{t("แบบประเมิน MMSE", "MMSE assessment")}</span><strong>{total ? `${total.total} / ${total.max}` : t("ยังไม่ครบ", "Incomplete")}</strong><Icon name="chevron" size={16} /></summary>
+      <summary><Icon name="brain" size={19} /><span>{t("แบบประเมิน MMSE", "MMSE assessment")}</span><strong>{simulated ? t("ข้อมูลสมมติ", "Simulated data") : total ? `${total.total} / ${total.max}` : t("ยังไม่ครบ", "Incomplete")}</strong><Icon name="chevron" size={16} /></summary>
       <fieldset disabled={saving} className="dashboard-user-fields">
         <legend className="dashboard-sr-only">{t("คะแนน MMSE", "MMSE scores")}</legend>
         <label className="dashboard-user-wide">{t("ระดับการศึกษา", "Education")}<select name="education" value={draft.profile.education} onChange={(event) => onChange("education", event.target.value)}><option value="">{t("ยังไม่ระบุ", "Not specified")}</option><option value="none">{t("ไม่ได้เรียนหนังสือ / อ่านไม่ออกเขียนไม่ได้", "No formal education / illiterate")}</option><option value="primary">{t("ประถมศึกษา", "Primary education")}</option><option value="above">{t("สูงกว่าประถมศึกษา", "Above primary education")}</option></select></label>
@@ -33,6 +36,7 @@ export default function DashboardUserEditor({ user, draft, locale, saving, dirty
         {MMSE_DOMAINS.map((domain, index) => <label key={domain.en}><span>{locale === "th" ? domain.th : domain.en} <small className="dashboard-field-range">0–{domain.max}</small></span><input name={`mmse-${index}`} type="number" min={0} max={domain.max} step={1} disabled={!draft.profile.education || (draft.profile.education === "none" && domain.literacy)} value={draft.profile.mmseScores[index] ?? ""} onChange={(event) => onChange("mmseScores", draft.profile.mmseScores.map((score, i) => i === index ? event.target.value === "" ? null : Number(event.target.value) : score))} /></label>)}
       </fieldset>
     </details>
+    <TaskPerformance performance={user.taskPerformance} locale={locale} />
     <fieldset disabled={saving} className="dashboard-user-fields dashboard-notes-fields"><legend>{t("หมายเหตุ", "Notes")}</legend><label className="dashboard-user-wide"><span className="dashboard-sr-only">{t("หมายเหตุผู้เข้าร่วม", "Participant notes")}</span><textarea name="notes" maxLength={2000} rows={3} value={draft.profile.notes} onChange={(event) => onChange("notes", event.target.value)} placeholder={t("บันทึกเพิ่มเติมสำหรับการติดตามผล…", "Add follow-up notes…")} /></label></fieldset>
     <p className="dashboard-profile-revision">{user.profileUpdatedAt ? `${t("แก้ไขล่าสุด", "Updated")}: ${date(user.profileUpdatedAt)} · ${user.profileUpdatedBy}` : t("ยังไม่มีข้อมูลที่บันทึก", "No profile saved yet.")}</p>
     <div className="dashboard-profile-actions"><span role="status">{dirty ? t("มีการแก้ไขที่ยังไม่บันทึก", "Unsaved changes") : t("ข้อมูลที่บันทึกไว้", "Saved details")}</span><div><button type="button" className="secondary" disabled={saving || !dirty} onClick={onReset}>{t("ยกเลิกการแก้ไข", "Discard changes")}</button><button type="submit" disabled={saving || !dirty}>{saving ? t("กำลังบันทึก…", "Saving…") : t("บันทึกข้อมูล", "Save details")}</button></div></div>

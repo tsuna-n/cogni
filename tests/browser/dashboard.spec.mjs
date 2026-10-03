@@ -2,7 +2,10 @@ import { test, expect } from "@playwright/test";
 
 const users = [
   { email: "admin@example.test", name: "Admin", role: "admin", profile: {} },
-  { email: "participant@example.test", name: "Participant", role: "user", profile: { participantId: "P001", studyGroup: "control", age: 54 } },
+  { email: "participant@example.test", name: "Participant", role: "user", profile: { participantId: "P001", studyGroup: "control", age: 54 }, taskPerformance: {
+    accuracyPercent: 80, sessionCount: 2, trials: 20,
+    games: [{ gameId: 1, sessionCount: 1, accuracyPercent: 60 }, { gameId: 2, sessionCount: 1, accuracyPercent: 100 }, { gameId: 3, sessionCount: 0, accuracyPercent: null }],
+  } },
   { email: "pending@example.test", name: "Pending profile", role: "user", profile: {} },
 ];
 const records = [
@@ -111,4 +114,38 @@ test("failed dashboard fetch does not show zero counts as successful data", asyn
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "ยังโหลดภาพรวมไม่ได้" })).toBeVisible();
   await expect(page.locator(".dashboard-live-stats")).toHaveCount(0);
+});
+
+test("task averages show their sample counts while unassessed MMSE remains blank", async ({ page }) => {
+  await mockDashboard(page);
+  const row = page.locator(".user-overview-table tbody tr").filter({ hasText: "participant@example.test" });
+  await expect(row).toContainText("80");
+  await expect(row).toContainText("2 รอบ");
+  await expect(row).toContainText("ยังไม่ครบ");
+  await row.getByRole("button", { name: "ดู / แก้ไข" }).click();
+  const performance = page.locator(".dashboard-user-details .dashboard-task-performance");
+  await expect(performance).toContainText("80%");
+  await expect(performance).toContainText("20 คำตอบ");
+  await expect(performance).toContainText("ใช้แทนผลประเมิน MMSE ไม่ได้");
+  await expect(page.locator('[name="mmse-0"]')).toHaveValue("");
+});
+
+test("ordinary users see saved task averages update after a successful sync", async ({ page }) => {
+  let performance = users[1].taskPerformance;
+  await page.addInitScript(() => localStorage.setItem("cogni_locale", "th"));
+  await page.route("**/api/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "participant@example.test", name: "Participant", role: "user", screeningRequired: false, profile: {} } } });
+    if (path === "/api/forms") return route.fulfill({ json: { forms: {} } });
+    if (path === "/api/config") return route.fulfill({ json: { registrationEnabled: false, study: null } });
+    if (path === "/api/research/summaries") return route.fulfill({ json: { records: [], taskPerformance: performance } });
+    return route.fulfill({ status: 404, json: { error: "not_found" } });
+  });
+  await page.goto("/");
+  const panel = page.locator(".research-dashboard .dashboard-task-performance");
+  await expect(panel).toContainText("80%");
+  performance = { ...performance, accuracyPercent: 90, sessionCount: 3, trials: 30 };
+  await page.evaluate(() => window.dispatchEvent(new Event("research-summaries-synced")));
+  await expect(panel).toContainText("90%");
+  await expect(panel).toContainText("30 คำตอบ");
 });

@@ -68,6 +68,11 @@
 .dashboard-profile-mmse > summary > span { flex: 1; }
 .dashboard-profile-mmse > summary > strong { font-size: 12px; color: var(--accent-text); font-weight: 500; }
 .dashboard-profile-mmse[open] > summary > svg:last-child { transform: rotate(90deg); }
+.dashboard-task-performance { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.dashboard-task-performance h3 { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; font-size: 15px; }
+.dashboard-task-performance h3 strong { color: var(--accent-text); font-size: 22px; }
+.dashboard-task-performance p { font-size: 13px; line-height: 1.7; margin-top: 10px; }
+.dashboard-task-performance ul { padding-left: 20px; font-size: 13px; line-height: 1.8; }
 .dashboard-production .dashboard-profile-mmse .dashboard-user-fields { padding-top: 4px; }
 .dashboard-field-range { font-size: 11px; color: var(--muted); }
 .dashboard-profile-revision { color: var(--muted); font-size: 11px; line-height: 1.6; padding: 0 24px; margin: 0 0 18px; overflow-wrap: anywhere; }

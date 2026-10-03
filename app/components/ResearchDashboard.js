@@ -12,6 +12,7 @@ import {
 } from "@/lib/research-summary.mjs";
 import { isOwnedResearchSession } from "@/lib/research/local-ownership.mjs";
 import ResearchHistory from "./ResearchHistory";
+import SyncedTaskPerformance from "./SyncedTaskPerformance";
 import Icon from "./DashboardIcon";
 
 const CHANNELS = ["TP9", "AF7", "AF8", "TP10"];
@@ -1206,6 +1207,7 @@ export default function ResearchDashboard({
           )}
         </span>
       </div>
+      <SyncedTaskPerformance key={accountEmail} locale={locale} />
       <ResearchHistory
         sessions={filtered}
         locale={locale}

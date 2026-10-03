@@ -41,3 +41,14 @@ test("empty or invalid profile data never creates fictional ages or completed as
   assert.equal(invalid.averageAge, null);
   assert.equal(invalid.assessed.length, 0);
 });
+
+test("explicit mock profiles are excluded from demographic and MMSE statistics without deleting their values", () => {
+  const mock = { ...accounts[0], profile: { ...accounts[0].profile, notes: "MOCK DATA — ข้อมูลสมมติสำหรับทดสอบระบบ" } };
+  const summary = userOverview([mock]);
+  assert.equal(summary.averageAge, null);
+  assert.equal(summary.assessed.length, 0);
+  assert.equal(summary.groups.unassigned, 1);
+  assert.equal(summary.education.unassigned, 1);
+  assert.equal(filterOverviewUsers([mock], { group: "patient" }).length, 0);
+  assert.equal(mock.profile.mmseScores[0], 5);
+});

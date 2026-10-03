@@ -78,11 +78,13 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
     load();
     window.addEventListener("research-dashboard-opened", load);
     window.addEventListener("research-session-finished", load);
+    window.addEventListener("research-summaries-synced", load);
     window.addEventListener("focus", load);
     return () => {
       ++requestId.current;
       window.removeEventListener("research-dashboard-opened", load);
       window.removeEventListener("research-session-finished", load);
+      window.removeEventListener("research-summaries-synced", load);
       window.removeEventListener("focus", load);
     };
   }, [enabled, load]);
@@ -157,8 +159,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
   const selected = users.find((user) => user.email === selectedEmail);
   const term = `${search} ${query}`.trim().toLowerCase();
   const filtered = filterOverviewUsers(users, { search: term, role: overviewRole, group: overviewGroup });
-  const scopeAccount = users.find((user) => user.email === recordScope);
-  const shownRecords = recordScope ? records.filter((record) => record.uploadedBy === recordScope || (scopeAccount?.profile.participantId && record.participantId === scopeAccount.profile.participantId)) : records;
+  const shownRecords = recordScope ? records.filter((record) => record.uploadedBy === recordScope) : records;
   const sessions = shownRecords.map((record) => ({ ...record.summary, id: record.recordId, summary: record.summary, uploadedBy: record.uploadedBy }));
   const pageCount = Math.max(1, Math.ceil(filtered.length / 10));
   const currentPage = Math.min(page, pageCount - 1);

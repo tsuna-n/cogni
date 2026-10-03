@@ -33,7 +33,11 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
   });
   const records = ["alice@example.test", "bob@example.test"].map((uploadedBy) => ({
     recordId: randomUUID(), participantId: "P001",
-    uploadedBy, uploadedAt: new Date().toISOString(), summary,
+    uploadedBy, uploadedAt: new Date().toISOString(), summary: { ...summary, game: {
+      gameId: 1, trials: 10, correct: uploadedBy.startsWith("alice") ? 8 : 1,
+      errors: uploadedBy.startsWith("alice") ? 2 : 9, accuracyPercent: uploadedBy.startsWith("alice") ? 80 : 10,
+      meanRtMs: 600,
+    } },
   }));
   const usersFile = path.join(directory, "users.json");
   await writeFile(usersFile, JSON.stringify(users), { mode: 0o600 });
@@ -131,6 +135,8 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
       assert.match(response.headers.get("cache-control"), /no-store/);
       assert.equal(data.records.length, 2);
       assert.deepEqual(new Set(data.records.map((record) => record.uploadedBy)), new Set(["alice@example.test", "bob@example.test"]));
+      assert.equal(data.taskPerformance.accuracyPercent, email.startsWith("alice") ? 80 : 10);
+      assert.equal(data.taskPerformance.sessionCount, 1);
     }
     const takeover = await request("/api/research/summaries", { cookie: aliceCookie, method: "POST", body: { recordId: records[1].recordId, summary } });
     assert.equal(takeover.response.status, 409);
@@ -138,6 +144,11 @@ test("HTTP permissions use server roles and isolate researcher data", { timeout:
     const stored = JSON.parse(await readFile(path.join(directory, "research-summaries.json"), "utf8"));
     assert.equal(stored.records[1].uploadedBy, "bob@example.test");
     assert.deepEqual((await request("/api/research/summaries", { cookie: userCookie })).data.records, []);
+    assert.equal((await request("/api/research/summaries", { cookie: userCookie })).data.taskPerformance.accuracyPercent, null);
+    const managed = (await request("/api/dashboard/users", { cookie: adminCookie })).data.users;
+    assert.equal(managed.find(user => user.email === "alice@example.test").taskPerformance.accuracyPercent, 80);
+    assert.equal(managed.find(user => user.email === "bob@example.test").taskPerformance.accuracyPercent, 10);
+    assert.deepEqual(managed.find(user => user.email === "user@example.test").profile, {});
   });
   await t.test("both staff roles can list and edit every user's profile without exposing credentials or changing roles", async () => {
     let revision = null;

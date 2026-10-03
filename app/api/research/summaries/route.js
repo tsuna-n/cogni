@@ -2,6 +2,7 @@ import { authorizeUser, privateResponseHeaders } from "@/lib/auth/authorization"
 import { isStorageError } from "@/lib/auth/store";
 import { listResearchRecords, saveResearchRecord } from "@/lib/research/server-store";
 import { normalizeResearchSubmission, ResearchValidationError } from "@/lib/research/validation";
+import { taskPerformance } from "@/lib/research/task-performance.mjs";
 
 export const runtime = "nodejs";
 
@@ -9,7 +10,8 @@ export async function GET() {
   try {
     const { user, response } = await authorizeUser();
     if (response) return response;
-    return Response.json({ records: await listResearchRecords(user) }, { headers: privateResponseHeaders });
+    const records = await listResearchRecords(user);
+    return Response.json({ records, taskPerformance: taskPerformance(records, user.email) }, { headers: privateResponseHeaders });
   } catch (error) {
     if (isStorageError(error)) return Response.json({ error: "storage_unavailable" }, { status: 503 });
     throw error;
