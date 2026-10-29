@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { profileAlphaBeta } from "@/lib/auth/user-profile.mjs";
 import DashboardIcon from "./DashboardIcon";
 
 const COPY = {
@@ -161,6 +162,7 @@ export default function ResearchHistory({
   loading,
   backfilling,
   source = "browser",
+  users = [],
 }) {
   const copy = COPY[locale] || COPY.th;
   const [firstId, setFirstId] = useState("");
@@ -250,9 +252,14 @@ export default function ResearchHistory({
       "game_errors",
       "game_accuracy_percent",
       "mean_reaction_ms",
+      "profile_alpha_uv2",
+      "profile_beta_uv2",
+      "profile_alpha_beta_source",
     ];
+    const profiles = new Map(users.map((user) => [user.email, user.profile]));
     const rows = sessions.map((session) => {
       const summary = session.summary;
+      const bands = profileAlphaBeta(profiles.get(session.uploadedBy || session.ownerEmail));
       return [
         session.id,
         session.uploadedBy || session.ownerEmail || "",
@@ -285,6 +292,9 @@ export default function ResearchHistory({
         summary.game?.errors,
         summary.game?.accuracyPercent,
         summary.game?.meanRtMs,
+        bands.alpha,
+        bands.beta,
+        bands.source,
       ]
         .map(csvCell)
         .join(",");
@@ -314,11 +324,14 @@ export default function ResearchHistory({
                 : "Server-synced summaries for this participant ID"
               : copy.note}
           </p>
+          {source === "server" && <p className="muted">{locale === "th"
+            ? "CSV รวมค่า Alpha/Beta (µV²) ระดับบัญชีจากโปรไฟล์ผู้บันทึกพร้อมแหล่งที่มา หากไม่มีค่าจะเว้นว่าง"
+            : "CSV includes account-level Alpha/Beta (µV²) from the uploader's saved profile and its source; unavailable values are blank."}</p>}
         </div>
         <button
           type="button"
           className="secondary"
-          disabled={!sessions.length || backfilling > 0}
+          disabled={loading || !sessions.length || backfilling > 0}
           onClick={exportSummaries}
         >
           {copy.export}

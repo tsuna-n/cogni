@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const users = [
   { email: "admin@example.test", name: "Admin", role: "admin", profile: {} },
@@ -14,7 +15,7 @@ const records = [
   { recordId: "test", participantId: "TEST", summary: { sessionId: "CHECK", studyGroup: "device_test", testMode: true, status: "complete", startedMs: 1780000020000 } },
 ];
 
-async function mockDashboard(page, { role = "admin", failSettings = false, failDashboard = false, dashboardUsers = users } = {}) {
+async function mockDashboard(page, { role = "admin", failSettings = false, failDashboard = false, dashboardUsers = users, dashboardRecords = records } = {}) {
   let study = { baselineSeconds: 30, postTaskSeconds: 30, maxTaskSeconds: 540, defaultTaskSeconds: 60, protocolVersion: "test_protocol" };
   let source = "environment";
   const writes = [];
@@ -25,7 +26,7 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
     if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "admin@example.test", name: "Admin", role } } });
     if (path === "/api/config") return route.fulfill({ json: { registrationEnabled: false, study } });
     if (path === "/api/dashboard/users") return route.fulfill(failDashboard ? { status: 503, json: { error: "storage_unavailable" } } : { json: { users: dashboardUsers } });
-    if (path === "/api/research/summaries") return route.fulfill({ json: { records } });
+    if (path === "/api/research/summaries") return route.fulfill({ json: { records: dashboardRecords } });
     if (path === "/api/admin/settings") {
       if (role !== "admin") return route.fulfill({ status: 403, json: { error: "forbidden" } });
       if (route.request().method() === "PUT") {
@@ -35,7 +36,8 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
       }
       return route.fulfill({ json: { study, source } });
     }
-    if (path === "/api/admin/participants") return route.fulfill({ json: { participants: [] } });
+    if (path === "/api/admin/participants") return route.fulfill({ json: { participants: [...new Set(dashboardRecords.map((record) => record.participantId))].map((id) => ({ id, sessionCount: dashboardRecords.filter((record) => record.participantId === id).length })) } });
+    if (path.startsWith("/api/admin/participants/")) return route.fulfill({ json: { records: dashboardRecords.filter((record) => record.participantId === decodeURIComponent(path.split("/").at(-1))) } });
     return route.fulfill({ status: 404, json: { error: "not_found" } });
   });
   await page.goto("/");
@@ -43,6 +45,57 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
   await expect(page.locator(".dashboard-live-stats")).not.toContainText("…");
   return writes;
 }
+
+test("admin CSV exports saved profile Alpha/Beta by uploader in both export views", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const measuredSource = 'คำนวณจาก EEG ที่บันทึก ช่วง task (3 เกม)';
+  const syntheticSource = 'ข้อมูลสังเคราะห์ ไม่ใช่ค่าที่วัดจริง';
+  const withPower = (user, alpha, beta, source) => ({ ...user, profile: { ...user.profile, notes: `[EEG Alpha/Beta]\nAlpha: ${alpha} µV²\nBeta: ${beta} µV²\nแหล่งข้อมูล: ${source}\n[/EEG Alpha/Beta]` } });
+  const dashboardUsers = [users[0], withPower(users[1], '12.345678', '0.000000', measuredSource), withPower(users[2], '2.5', '1.25', syntheticSource)];
+  const makeRecord = (id, email) => ({
+    recordId: id, uploadedBy: email, participantId: "OLD-ID",
+    summary: {
+      startedMs: 1780000000000, endedMs: 1780000065000, status: "complete", testMode: false,
+      participant: "OLD-ID", sessionId: id, studyGroup: "control", gameId: 1,
+      durationSeconds: 65, baselineSeconds: 30, taskSeconds: 5, restSeconds: 30,
+      samples: 1000, channelSamples: [250, 250, 250, 250], averageHzPerChannel: 1000 / 4 / 65,
+      clippedSamples: 0, clippedPercent: 0, missingPackets: 0, duplicatePackets: 0, reorderedPackets: 0, markers: 8,
+    },
+  });
+  const dashboardRecords = [makeRecord("measured", users[1].email), makeRecord("synthetic", users[2].email), makeRecord("missing", users[0].email)];
+  await mockDashboard(page, { dashboardUsers, dashboardRecords });
+  await page.getByRole("button", { name: "ส่งออกข้อมูล CSV", exact: true }).click();
+
+  const downloadCsv = async (scope) => {
+    const pendingDownload = page.waitForEvent("download");
+    await scope.getByRole("button", { name: "ส่งออกสรุปทุกครั้ง (.csv)", exact: true }).click();
+    const download = await pendingDownload;
+    expect(download.suggestedFilename()).toMatch(/^cogniload_session_summaries_.*\.csv$/);
+    return (await readFile(await download.path(), "utf8")).replace(/^\uFEFF/, "").trim().split(/\r?\n/);
+  };
+  const assertPowers = (lines) => {
+    expect(lines[0]).toMatch(/,profile_alpha_uv2,profile_beta_uv2,profile_alpha_beta_source$/);
+    expect(lines.find((line) => line.startsWith('"measured",'))).toContain(`,"12.345678","0","${measuredSource}"`);
+    expect(lines.find((line) => line.startsWith('"synthetic",'))).toContain(`,"2.5","1.25","${syntheticSource}"`);
+    expect(lines.find((line) => line.startsWith('"missing",'))).toMatch(/,"","",""$/);
+  };
+  const results = page.locator("#dashboard-panel-summaries");
+  assertPowers(await downloadCsv(results));
+  await results.getByRole("combobox", { name: /^บัญชี \/ ผู้เข้าร่วม/ }).selectOption(users[1].email);
+  const filtered = await downloadCsv(results);
+  expect(filtered).toHaveLength(2);
+  expect(filtered[1]).toContain(`,"12.345678","0","${measuredSource}"`);
+
+  await page.getByRole("button", { name: "ผู้ดูแลระบบ", exact: true }).click();
+  await page.locator(".admin-participants").getByRole("button", { name: /OLD-ID/ }).click();
+  assertPowers(await downloadCsv(page.locator(".admin-panel")));
+  await page.route("**/api/dashboard/users", (route) => route.fulfill({ status: 503, json: { error: "storage_unavailable" } }));
+  await page.locator(".admin-panel").getByRole("button", { name: "รีเฟรช", exact: true }).click();
+  await expect(page.locator(".admin-panel").getByRole("alert")).toContainText("storage_unavailable");
+  await expect(page.locator(".admin-panel").getByRole("button", { name: "ส่งออกสรุปทุกครั้ง (.csv)", exact: true })).toBeDisabled();
+  expect(errors).toEqual([]);
+});
 
 test("overview shows synced study data and links to profiles, results and settings", async ({ page }) => {
   const errors = [];

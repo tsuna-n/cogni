@@ -240,7 +240,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
     </div>
     <div role="tabpanel" id="dashboard-panel-summaries" aria-labelledby="dashboard-tab-summaries" hidden={view !== "summaries"}>
       <div className="dashboard-results-toolbar"><div><h2>{t("ผลสรุปการทดลอง", "Session summaries")}</h2><p className="muted">{sessions.length} {t("รอบที่ซิงก์แล้ว", "synced sessions")}</p></div><label>{t("บัญชี / ผู้เข้าร่วม", "Account / participant")}<select value={recordScope} onChange={(event) => setRecordScope(event.target.value)}><option value="">{t("ทุกบัญชี", "All accounts")}</option>{users.map((user) => <option key={user.email} value={user.email}>{user.name || user.email}{(user.participantId || user.profile.participantId) ? ` · ${user.participantId || user.profile.participantId}` : ""}</option>)}</select></label></div>
-      <ResearchHistory sessions={sessions} locale={locale} loading={loading} source="server" />
+      <ResearchHistory sessions={sessions} users={users} locale={locale} loading={loading} source="server" />
     </div>
   </div>;
 }

@@ -9,6 +9,7 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
   const [participants, setParticipants] = useState([]);
   const [selected, setSelected] = useState("");
   const [records, setRecords] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
@@ -128,14 +129,14 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
     let active = true;
     setLoading(true);
     setError("");
-    load(`/api/admin/participants/${encodeURIComponent(selected)}`).then((data) => {
-      if (active) setRecords(data.records);
-    }).catch((cause) => { if (active) setError(cause.message); }).finally(() => { if (active) setLoading(false); });
+    Promise.all([load(`/api/admin/participants/${encodeURIComponent(selected)}`), load("/api/dashboard/users")]).then(([data, accounts]) => {
+      if (active) { setRecords(data.records); setUsers(accounts.users); }
+    }).catch((cause) => { if (active) { setRecords([]); setUsers([]); setError(cause.message); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [enabled, selected, refresh, load]);
 
   useEffect(() => {
-    if (!enabled) { setSelected(""); setParticipants([]); setRecords([]); setStudyDraft(null); }
+    if (!enabled) { setSelected(""); setParticipants([]); setRecords([]); setUsers([]); setStudyDraft(null); }
   }, [enabled]);
 
   const sessions = records.map((record) => ({ id: record.recordId, ...record.summary, summary: record.summary, uploadedBy: record.uploadedBy }));
@@ -180,7 +181,7 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
     </div>
     {selected && <>
       <div className="card study-card"><h3>{locale === "th" ? "รหัสผู้เข้าร่วม" : "Participant ID"}: {selected}</h3><p className="muted">{records.length} {locale === "th" ? "รอบที่ซิงก์แล้ว" : "synced sessions"}</p>{records.length > 0 && <p className="muted">{locale === "th" ? "ผู้บันทึก" : "Uploaded by"}: {[...new Set(records.map((record) => record.uploadedBy))].join(", ")}</p>}</div>
-      <ResearchHistory sessions={sessions} locale={locale} loading={loading} source="server" />
+      <ResearchHistory sessions={sessions} users={users} locale={locale} loading={loading} source="server" />
     </>}
   </div>;
 }

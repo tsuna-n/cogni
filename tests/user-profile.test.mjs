@@ -3,8 +3,24 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { normalizeUserProfile, mmseTotal, UserProfileError } from "../lib/auth/user-profile.mjs";
+import { normalizeUserProfile, mmseTotal, profileAlphaBeta, UserProfileError } from "../lib/auth/user-profile.mjs";
 import { createUser, listManagedUsers, updateManagedUser } from "../lib/auth/store.js";
+
+test("reads saved account Alpha/Beta and preserves their provenance", () => {
+  const source = "คำนวณจาก EEG ที่บันทึก ช่วง task (3 เกม)";
+  assert.deepEqual(profileAlphaBeta({ notes: `Other notes\n[EEG Alpha/Beta]\nAlpha: 12.345678 µV²\nBeta: 0.000000 µV²\nแหล่งข้อมูล: ${source}\nรหัส EEG เดิม: P099\n[/EEG Alpha/Beta]` }), {
+    alpha: 12.345678, beta: 0, source,
+  });
+  assert.deepEqual(profileAlphaBeta({ notes: "[EEG Alpha/Beta]\r\nAlpha: 2.5 µV²\r\nBeta: 1.25 µV²\r\nแหล่งข้อมูล: ข้อมูลสังเคราะห์ ไม่ใช่ค่าที่วัดจริง\r\n[/EEG Alpha/Beta]" }), {
+    alpha: 2.5, beta: 1.25, source: "ข้อมูลสังเคราะห์ ไม่ใช่ค่าที่วัดจริง",
+  });
+});
+
+test("missing or invalid profile Alpha/Beta stays absent rather than becoming zero", () => {
+  for (const profile of [undefined, {}, { notes: "Alpha: 3 µV²\nBeta: 4 µV²" }, { notes: "[EEG Alpha/Beta]\nAlpha: -1 µV²\nBeta: NaN µV²\n[/EEG Alpha/Beta]" }]) {
+    assert.deepEqual(profileAlphaBeta(profile), { alpha: null, beta: null, source: "" });
+  }
+});
 
 test("profile validation supports unassessed domains and the original MMSE education rules", () => {
   const empty = normalizeUserProfile({ name: " Alice ", profile: {} });
