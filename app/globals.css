@@ -531,6 +531,11 @@ select {
 .research-history-table td strong {
   color: var(--text);
 }
+.research-history-table td.research-band-source {
+  min-width: 14rem;
+  max-width: 20rem;
+  white-space: normal;
+}
 .research-compare {
   margin-top: 16px;
 }

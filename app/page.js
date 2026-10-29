@@ -2892,6 +2892,7 @@ export default function Home() {
                 locale={locale}
                 accountEmail={accountEmail}
                 accountName={account}
+                accountProfile={accountData?.profile}
                 search={dashboardSearch}
                 onClearSearch={() => setDashboardSearch("")}
               />

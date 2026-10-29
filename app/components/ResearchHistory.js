@@ -22,6 +22,8 @@ const COPY = {
     samples: "EEG samples",
     rate: "เฉลี่ยต่อช่อง (Hz)",
     accuracy: "ความแม่นยำเกม",
+    bandSource: "แหล่งที่มา Alpha/Beta",
+    bandNote: "Alpha/Beta (µV²) เป็นค่าระดับบัญชีจากโปรไฟล์ผู้บันทึก ใช้ค่าเดียวกันในทุกรอบของบัญชีนั้น รวมใน CSV ด้วย · — หมายถึงไม่มีค่า",
     raw: "EEG ดิบ",
     available: "เก็บอยู่",
     removed: "ลบแล้ว",
@@ -77,6 +79,8 @@ const COPY = {
     samples: "EEG samples",
     rate: "Per-channel average (Hz)",
     accuracy: "Game accuracy",
+    bandSource: "Alpha/Beta source",
+    bandNote: "Alpha/Beta (µV²) are account-level values from the recorder's saved profile, repeated across that account's sessions and included in CSV. — means unavailable.",
     raw: "Raw EEG",
     available: "Saved",
     removed: "Removed",
@@ -215,6 +219,7 @@ export default function ResearchHistory({
   const first = sessions.find((session) => session.id === firstId);
   const second = sessions.find((session) => session.id === secondId);
   const comparable = first && second && first.id !== second.id;
+  const bandsByEmail = new Map(users.map((user) => [user.email, profileAlphaBeta(user.profile)]));
 
   const exportSummaries = () => {
     const headers = [
@@ -256,10 +261,9 @@ export default function ResearchHistory({
       "profile_beta_uv2",
       "profile_alpha_beta_source",
     ];
-    const profiles = new Map(users.map((user) => [user.email, user.profile]));
     const rows = sessions.map((session) => {
       const summary = session.summary;
-      const bands = profileAlphaBeta(profiles.get(session.uploadedBy || session.ownerEmail));
+      const bands = bandsByEmail.get(session.uploadedBy || session.ownerEmail || session.serverSyncedBy);
       return [
         session.id,
         session.uploadedBy || session.ownerEmail || "",
@@ -292,9 +296,9 @@ export default function ResearchHistory({
         summary.game?.errors,
         summary.game?.accuracyPercent,
         summary.game?.meanRtMs,
-        bands.alpha,
-        bands.beta,
-        bands.source,
+        bands?.alpha,
+        bands?.beta,
+        bands?.source,
       ]
         .map(csvCell)
         .join(",");
@@ -324,9 +328,7 @@ export default function ResearchHistory({
                 : "Server-synced summaries for this participant ID"
               : copy.note}
           </p>
-          {source === "server" && <p className="muted">{locale === "th"
-            ? "CSV รวมค่า Alpha/Beta (µV²) ระดับบัญชีจากโปรไฟล์ผู้บันทึกพร้อมแหล่งที่มา หากไม่มีค่าจะเว้นว่าง"
-            : "CSV includes account-level Alpha/Beta (µV²) from the uploader's saved profile and its source; unavailable values are blank."}</p>}
+          <p className="muted">{copy.bandNote}</p>
         </div>
         <button
           type="button"
@@ -369,6 +371,9 @@ export default function ResearchHistory({
                   <th>{copy.date}</th>
                   <th>{copy.run}</th>
                   {source === "server" && <th>{locale === "th" ? "บัญชีที่บันทึก" : "Recorded by"}</th>}
+                  <th scope="col">Alpha (µV²)</th>
+                  <th scope="col">Beta (µV²)</th>
+                  <th scope="col">{copy.bandSource}</th>
                   <th>{copy.group}</th>
                   <th>{copy.protocol}</th>
                   <th>{copy.game}</th>
@@ -381,41 +386,47 @@ export default function ResearchHistory({
                 </tr>
               </thead>
               <tbody>
-                {sessions.map((session) => (
-                  <tr key={session.id}>
-                    <td>
-                      {new Date(session.startedMs).toLocaleString(dateLocale)}
-                    </td>
-                    <td>
-                      <strong>{session.participant || "—"}</strong>
-                      <br />
-                      {session.sessionId || "—"}
-                    </td>
-                    {source === "server" && <td>{session.uploadedBy || "—"}</td>}
-                    <td>{groupName(session)}</td>
-                    <td>{session.summary.protocolVersion || "—"}</td>
-                    <td>{gameName(session)}</td>
-                    <td>{statusName(session)}</td>
-                    <td>{number(session.summary.taskSeconds, 1, locale)}</td>
-                    <td>{number(session.summary.samples, 0, locale)}</td>
-                    <td>
-                      {number(session.summary.averageHzPerChannel, 1, locale)}
-                    </td>
-                    <td>
-                      {number(session.summary.game?.accuracyPercent, 1, locale)}
-                      {session.summary.game?.accuracyPercent != null ? "%" : ""}
-                    </td>
-                    <td>
-                      {source === "server"
-                        ? locale === "th"
-                          ? "อยู่ในเครื่องผู้วิจัย"
-                          : "Researcher's device"
-                        : session.rawDeleted
-                          ? copy.removed
-                          : copy.available}
-                    </td>
-                  </tr>
-                ))}
+                {sessions.map((session) => {
+                  const bands = bandsByEmail.get(session.uploadedBy || session.ownerEmail || session.serverSyncedBy);
+                  return (
+                    <tr key={session.id}>
+                      <td>
+                        {new Date(session.startedMs).toLocaleString(dateLocale)}
+                      </td>
+                      <td>
+                        <strong>{session.participant || "—"}</strong>
+                        <br />
+                        {session.sessionId || "—"}
+                      </td>
+                      {source === "server" && <td>{session.uploadedBy || "—"}</td>}
+                      <td>{number(bands?.alpha, 6, locale)}</td>
+                      <td>{number(bands?.beta, 6, locale)}</td>
+                      <td className="research-band-source">{bands?.source || "—"}</td>
+                      <td>{groupName(session)}</td>
+                      <td>{session.summary.protocolVersion || "—"}</td>
+                      <td>{gameName(session)}</td>
+                      <td>{statusName(session)}</td>
+                      <td>{number(session.summary.taskSeconds, 1, locale)}</td>
+                      <td>{number(session.summary.samples, 0, locale)}</td>
+                      <td>
+                        {number(session.summary.averageHzPerChannel, 1, locale)}
+                      </td>
+                      <td>
+                        {number(session.summary.game?.accuracyPercent, 1, locale)}
+                        {session.summary.game?.accuracyPercent != null ? "%" : ""}
+                      </td>
+                      <td>
+                        {source === "server"
+                          ? locale === "th"
+                            ? "อยู่ในเครื่องผู้วิจัย"
+                            : "Researcher's device"
+                          : session.rawDeleted
+                            ? copy.removed
+                            : copy.available}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

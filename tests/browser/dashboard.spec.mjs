@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { summarizeResearchSession } from "../../lib/research-summary.mjs";
 
 const users = [
   { email: "admin@example.test", name: "Admin", role: "admin", profile: {} },
@@ -23,7 +24,7 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/forms") return route.fulfill({ json: { forms: {} } });
-    if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "admin@example.test", name: "Admin", role } } });
+    if (path === "/api/auth/me") return route.fulfill({ json: { user: { email: "admin@example.test", name: "Admin", role, profile: dashboardUsers.find((user) => user.email === "admin@example.test")?.profile || {} } } });
     if (path === "/api/config") return route.fulfill({ json: { registrationEnabled: false, study } });
     if (path === "/api/dashboard/users") return route.fulfill(failDashboard ? { status: 503, json: { error: "storage_unavailable" } } : { json: { users: dashboardUsers } });
     if (path === "/api/research/summaries") return route.fulfill({ json: { records: dashboardRecords } });
@@ -46,7 +47,7 @@ async function mockDashboard(page, { role = "admin", failSettings = false, failD
   return writes;
 }
 
-test("admin CSV exports saved profile Alpha/Beta by uploader in both export views", async ({ page }) => {
+test("session history displays and exports profile Alpha/Beta by uploader in both staff views", async ({ page }, testInfo) => {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const measuredSource = 'คำนวณจาก EEG ที่บันทึก ช่วง task (3 เกม)';
@@ -81,6 +82,33 @@ test("admin CSV exports saved profile Alpha/Beta by uploader in both export view
     expect(lines.find((line) => line.startsWith('"missing",'))).toMatch(/,"","",""$/);
   };
   const results = page.locator("#dashboard-panel-summaries");
+  const assertDisplayedPowers = async (scope) => {
+    const table = scope.locator(".research-history-table").first();
+    const headers = await table.getByRole("columnheader").allTextContents();
+    const alpha = headers.indexOf("Alpha (µV²)");
+    const beta = headers.indexOf("Beta (µV²)");
+    expect(alpha).toBeGreaterThan(-1);
+    expect(beta).toBeGreaterThan(-1);
+    const rows = table.locator("tbody tr");
+    await expect(rows.nth(0).getByRole("cell").nth(alpha)).toHaveText("12.345678");
+    await expect(rows.nth(0).getByRole("cell").nth(beta)).toHaveText("0.000000");
+    await expect(rows.nth(0)).toContainText(measuredSource);
+    await expect(rows.nth(1).getByRole("cell").nth(alpha)).toHaveText("2.500000");
+    await expect(rows.nth(1).getByRole("cell").nth(beta)).toHaveText("1.250000");
+    await expect(rows.nth(1)).toContainText(syntheticSource);
+    await expect(rows.nth(2).getByRole("cell").nth(alpha)).toHaveText("—");
+    await expect(rows.nth(2).getByRole("cell").nth(beta)).toHaveText("—");
+  };
+  await assertDisplayedPowers(results);
+  await page.getByRole("button", { name: "Switch to English", exact: true }).click();
+  await expect(results.getByRole("columnheader", { name: "Alpha/Beta source", exact: true })).toBeVisible();
+  await expect(results.locator(".research-history")).toContainText("account-level values");
+  await page.getByRole("button", { name: "เปลี่ยนเป็นภาษาไทย", exact: true }).click();
+  for (const width of [320, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await results.locator(".research-history").screenshot({ path: testInfo.outputPath("history-alpha-beta.png") });
   assertPowers(await downloadCsv(results));
   await results.getByRole("combobox", { name: /^บัญชี \/ ผู้เข้าร่วม/ }).selectOption(users[1].email);
   const filtered = await downloadCsv(results);
@@ -89,12 +117,47 @@ test("admin CSV exports saved profile Alpha/Beta by uploader in both export view
 
   await page.getByRole("button", { name: "ผู้ดูแลระบบ", exact: true }).click();
   await page.locator(".admin-participants").getByRole("button", { name: /OLD-ID/ }).click();
+  await expect(page.locator(".admin-panel").getByRole("button", { name: "ส่งออกสรุปทุกครั้ง (.csv)", exact: true })).toBeEnabled();
+  await assertDisplayedPowers(page.locator(".admin-panel"));
   assertPowers(await downloadCsv(page.locator(".admin-panel")));
   await page.route("**/api/dashboard/users", (route) => route.fulfill({ status: 503, json: { error: "storage_unavailable" } }));
   await page.locator(".admin-panel").getByRole("button", { name: "รีเฟรช", exact: true }).click();
   await expect(page.locator(".admin-panel").getByRole("alert")).toContainText("storage_unavailable");
   await expect(page.locator(".admin-panel").getByRole("button", { name: "ส่งออกสรุปทุกครั้ง (.csv)", exact: true })).toBeDisabled();
   expect(errors).toEqual([]);
+});
+
+test("personal local session history displays the signed-in account's saved Alpha/Beta", async ({ page }) => {
+  const profile = { notes: "[EEG Alpha/Beta]\nAlpha: 4.25 µV²\nBeta: 0.000000 µV²\nแหล่งข้อมูล: ข้อมูลสังเคราะห์ ไม่ใช่ค่าที่วัดจริง\n[/EEG Alpha/Beta]" };
+  await mockDashboard(page, { dashboardUsers: [{ ...users[0], profile }] });
+  const startedMs = 1780000000000;
+  const session = {
+    id: "local-session", ownerEmail: "admin@example.test", participant: "LOCAL", sessionId: "LOCAL-G1",
+    startedMs, endedMs: startedMs + 65_000, phaseStarts: [startedMs, startedMs + 30_000, startedMs + 35_000],
+    status: "complete", studyGroup: "control", gameId: 1, channels: [250, 250, 250, 250],
+  };
+  session.summary = summarizeResearchSession(session);
+  await page.evaluate(async (saved) => {
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.open("cogniload-muse-research", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const transaction = database.transaction("sessions", "readwrite");
+        transaction.objectStore("sessions").put(saved);
+        transaction.oncomplete = () => { database.close(); resolve(); };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    });
+    window.dispatchEvent(new Event("research-dashboard-opened"));
+  }, session);
+  await page.getByRole("tab", { name: "ข้อมูลในเครื่อง", exact: true }).click();
+  const table = page.locator("#dashboard-panel-personal .research-history-table").first();
+  const headers = await table.getByRole("columnheader").allTextContents();
+  const row = table.locator("tbody tr").filter({ hasText: "LOCAL-G1" });
+  await expect(row.getByRole("cell").nth(headers.indexOf("Alpha (µV²)"))).toHaveText("4.250000");
+  await expect(row.getByRole("cell").nth(headers.indexOf("Beta (µV²)"))).toHaveText("0.000000");
+  await expect(row).toContainText("ข้อมูลสังเคราะห์ ไม่ใช่ค่าที่วัดจริง");
 });
 
 test("overview shows synced study data and links to profiles, results and settings", async ({ page }) => {

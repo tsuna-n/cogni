@@ -56,6 +56,7 @@ export default function ResearchDashboard({
   locale = "th",
   accountEmail = "",
   accountName = "",
+  accountProfile,
   search = "",
   onClearSearch,
 }) {
@@ -1210,6 +1211,7 @@ export default function ResearchDashboard({
       <SyncedTaskPerformance key={accountEmail} locale={locale} />
       <ResearchHistory
         sessions={filtered}
+        users={[{ email: accountEmail, profile: accountProfile }]}
         locale={locale}
         loading={loading}
         backfilling={backfilling}
