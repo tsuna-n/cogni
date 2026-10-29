@@ -505,6 +505,61 @@ select {
 .research-history > .study-heading {
   align-items: center;
 }
+.workspace-shell .research-history .research-export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 48px;
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 1px solid var(--cyan);
+  border-radius: 8px;
+  background: var(--cyan);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.15);
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+.research-export-button > svg,
+.research-export-format {
+  flex-shrink: 0;
+}
+.research-export-format {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.workspace-shell .research-history .research-export-button:not(:disabled):hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+.workspace-shell .research-history .research-export-button:not(:disabled):active {
+  transform: translateY(1px);
+}
+.workspace-shell .research-history .research-export-button:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
+}
+.workspace-shell .research-history .research-export-button:disabled {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--muted);
+  box-shadow: none;
+  opacity: 0.65;
+}
+@media (max-width: 650px) {
+  .workspace-shell .research-history .research-export-button {
+    width: 100%;
+  }
+}
 .research-history-empty {
   color: var(--muted);
 }

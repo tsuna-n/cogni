@@ -12,6 +12,7 @@ const COPY = {
     loading: "กำลังโหลดรอบทดลอง…",
     backfilling: "กำลังสรุปรอบทดลองเดิม",
     export: "ส่งออกสรุปทุกครั้ง (.csv)",
+    exportLabel: "ส่งออกสรุปทุกครั้ง",
     date: "วันที่",
     run: "ผู้เข้าร่วม / รอบ",
     group: "กลุ่ม",
@@ -69,6 +70,7 @@ const COPY = {
     loading: "Loading sessions…",
     backfilling: "Summarizing earlier sessions",
     export: "Export all summaries (.csv)",
+    exportLabel: "Export all summaries",
     date: "Date",
     run: "Participant / session",
     group: "Group",
@@ -332,11 +334,14 @@ export default function ResearchHistory({
         </div>
         <button
           type="button"
-          className="secondary"
+          className="research-export-button"
+          aria-label={copy.export}
           disabled={loading || !sessions.length || backfilling > 0}
           onClick={exportSummaries}
         >
-          {copy.export}
+          <DashboardIcon name="download" size={20} />
+          <span>{copy.exportLabel}</span>
+          <span className="research-export-format" aria-hidden="true">CSV</span>
         </button>
       </div>
       {backfilling > 0 && (
