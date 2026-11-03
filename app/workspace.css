@@ -683,14 +683,11 @@ input[type="checkbox"] {
   font-size: 16px;
   line-height: 1.9;
 }
-/* The sign-in and registration screen shares the same EEG illustration, colors, and controls. */
+/* The sign-in and registration screen shares the same activity illustration, colors, and controls. */
 .auth-bg {
   background: var(--bg);
   padding: 38px;
   color: var(--text);
-}
-#authWave {
-  opacity: 0.1;
 }
 .auth-layout {
   position: relative;
@@ -729,10 +726,10 @@ input[type="checkbox"] {
   max-width: 480px;
   margin: 0;
 }
-.auth-eeg-visual {
+.auth-activity-visual {
   height: 280px;
   margin: 20px 0 24px;
-  background: url("/eeg-research.svg") center/contain no-repeat;
+  background: url("/activity-workspace.svg") center/contain no-repeat;
   border-radius: 10px;
 }
 .auth-feature-list {
@@ -895,7 +892,7 @@ input[type="checkbox"] {
   .auth-feature-list span {
     font-size: 13px;
   }
-  .auth-eeg-visual {
+  .auth-activity-visual {
     height: 240px;
   }
 }

@@ -15,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "CogniLoad-XAI | Muse EEG Research",
+  title: "CogniLoad-XAI | Activities",
   description:
-    "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV",
+    "พื้นที่สำหรับทำกิจกรรม แบบประเมิน และติดตามผล พร้อมส่งออกข้อมูล CSV",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg" },
   appleWebApp: {

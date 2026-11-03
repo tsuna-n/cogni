@@ -448,7 +448,7 @@
   background: var(--surface-soft);
   overflow: hidden;
 }
-.workspace-eeg-mark {
+.workspace-activity-mark {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -456,7 +456,7 @@
   margin-bottom: 10px;
   color: var(--accent-text);
 }
-.workspace-eeg-mark span {
+.workspace-activity-mark span {
   font-size: 11px;
   letter-spacing: 0.8px;
   font-weight: 600;
@@ -608,7 +608,7 @@
   align-items: center;
   justify-content: space-between;
   min-height: 220px;
-  background: var(--surface-soft) url("/eeg-research.svg") right 20px center/auto 92%
+  background: var(--surface-soft) url("/activity-workspace.svg") right 20px center/auto 92%
     no-repeat;
   border: 1px solid var(--border);
   border-radius: 9px;

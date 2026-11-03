@@ -20,12 +20,12 @@ const COPY = {
     protocol: "โปรโตคอล",
     status: "สถานะ",
     task: "Task (วินาที)",
-    samples: "EEG samples",
+    samples: "Samples",
     rate: "เฉลี่ยต่อช่อง (Hz)",
     accuracy: "ความแม่นยำเกม",
     bandSource: "แหล่งที่มา Alpha/Beta",
     bandNote: "Alpha/Beta (µV²) เป็นค่าระดับบัญชีจากโปรไฟล์ผู้บันทึก ใช้ค่าเดียวกันในทุกรอบของบัญชีนั้น รวมใน CSV ด้วย · — หมายถึงไม่มีค่า",
-    raw: "EEG ดิบ",
+    raw: "ข้อมูลดิบ",
     available: "เก็บอยู่",
     removed: "ลบแล้ว",
     compare: "เปรียบเทียบผลสรุปสองรอบ",
@@ -78,12 +78,12 @@ const COPY = {
     protocol: "Protocol",
     status: "Status",
     task: "Task (seconds)",
-    samples: "EEG samples",
+    samples: "Samples",
     rate: "Per-channel average (Hz)",
     accuracy: "Game accuracy",
     bandSource: "Alpha/Beta source",
     bandNote: "Alpha/Beta (µV²) are account-level values from the recorder's saved profile, repeated across that account's sessions and included in CSV. — means unavailable.",
-    raw: "Raw EEG",
+    raw: "Raw data",
     available: "Saved",
     removed: "Removed",
     compare: "Compare two session summaries",
@@ -171,10 +171,12 @@ export default function ResearchHistory({
   users = [],
 }) {
   const copy = COPY[locale] || COPY.th;
-  const [firstId, setFirstId] = useState("");
-  const [secondId, setSecondId] = useState("");
+  const [firstId, setFirstId] = useState(sessions[1]?.id || sessions[0]?.id || "");
+  const [secondId, setSecondId] = useState(sessions[0]?.id || "");
+  const [previousSessions, setPreviousSessions] = useState(sessions);
 
-  useEffect(() => {
+  if (sessions !== previousSessions) {
+    setPreviousSessions(sessions);
     setFirstId((previous) =>
       sessions.some((session) => session.id === previous)
         ? previous
@@ -185,7 +187,7 @@ export default function ResearchHistory({
         ? previous
         : sessions[0]?.id || "",
     );
-  }, [sessions]);
+  }
 
   useEffect(() => {
     const onSelect = (event) => {
@@ -406,7 +408,7 @@ export default function ResearchHistory({
                       {source === "server" && <td>{session.uploadedBy || "—"}</td>}
                       <td>{number(bands?.alpha, 6, locale)}</td>
                       <td>{number(bands?.beta, 6, locale)}</td>
-                      <td className="research-band-source">{bands?.source || "—"}</td>
+                      <td className="research-band-source">{bands?.source?.replace(/\bEEG\b/gi, locale === "th" ? "อุปกรณ์" : "device data") || "—"}</td>
                       <td>{groupName(session)}</td>
                       <td>{session.summary.protocolVersion || "—"}</td>
                       <td>{gameName(session)}</td>

@@ -704,14 +704,6 @@ select {
       transparent 60%
     );
 }
-#authWave {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.45;
-  pointer-events: none;
-}
 .auth-inner {
   position: relative;
   z-index: 1;

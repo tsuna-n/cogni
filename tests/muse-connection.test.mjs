@@ -23,8 +23,15 @@ test('connection diagnostics preserve DOMException properties and serialize with
 test('startup NetworkError is distinguished from a GATT connection failure', () => {
   const error = new DOMException('Write failed', 'NetworkError');
   assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'gatt')), /Bluetooth connection failed/);
-  assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'start')), /EEG startup failed/);
+  assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'start')), /Data startup failed/);
   assert.match(museConnectionMessage(museConnectionDetails(error, 'Muse', 'driver')), /Muse driver load failed/);
+});
+test('displayed diagnostics use neutral wording while preserving the original error', () => {
+  const details = museConnectionDetails(Object.assign(new Error('EEG channel unavailable'), { museStage: 'eeg' }));
+  assert.equal(details.message, 'EEG channel unavailable');
+  assert.doesNotMatch(formatMuseConnectionDetails(details), /\bEEG\b/i);
+  assert.match(formatMuseConnectionDetails(details), /Stage: channels/);
+  assert.doesNotMatch(museConnectionMessage(details), /\bEEG\b/i);
 });
 const notFound = () => new DOMException('No matching service or characteristic', 'NotFoundError');
 function packet(index = 65535) {

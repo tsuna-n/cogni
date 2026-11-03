@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 const HEART_RATE_SERVICE = 0x180d;
 const HEART_RATE_MEASUREMENT = 0x2a37;
@@ -122,8 +122,16 @@ function characteristicCapabilities(characteristic) {
   ].filter(Boolean);
 }
 
+const subscribeToBluetoothSupport = () => () => {};
+
 export default function BleDevicesPanel() {
-  const [supported, setSupported] = useState(null);
+  const supported = useSyncExternalStore(
+    subscribeToBluetoothSupport,
+    () => Boolean(navigator.bluetooth) && window.isSecureContext,
+    () => null,
+  );
+  const [heartConnected, setHeartConnected] = useState(false);
+  const [iotConnected, setIotConnected] = useState(false);
   const [heartBusy, setHeartBusy] = useState(false);
   const [heartStatus, setHeartStatus] = useState(
     "Not connected / ยังไม่เชื่อมต่อ",
@@ -150,14 +158,6 @@ export default function BleDevicesPanel() {
   const iotDeviceRef = useRef(null);
   const iotCharacteristicRef = useRef(null);
 
-  useEffect(() => {
-    setSupported(
-      typeof navigator !== "undefined" &&
-        Boolean(navigator.bluetooth) &&
-        window.isSecureContext,
-    );
-  }, []);
-
   const onHeartMeasurement = useCallback((event) => {
     const measurement = parseHeartRate(event.target.value);
     setHeartRate(measurement.bpm);
@@ -183,6 +183,7 @@ export default function BleDevicesPanel() {
     if (heartDeviceRef.current?.gatt?.connected)
       heartDeviceRef.current.gatt.disconnect();
     heartDeviceRef.current = null;
+    setHeartConnected(false);
     setHeartBusy(false);
     setHeartStatus("Not connected / ยังไม่เชื่อมต่อ");
   }, [onHeartMeasurement]);
@@ -198,11 +199,13 @@ export default function BleDevicesPanel() {
         optionalServices: [BATTERY_SERVICE],
       });
       heartDeviceRef.current = device;
+      setHeartConnected(true);
       device.addEventListener(
         "gattserverdisconnected",
         () => {
           heartCharacteristicRef.current = null;
           heartDeviceRef.current = null;
+          setHeartConnected(false);
           setHeartBusy(false);
           setHeartStatus("Disconnected / การเชื่อมต่อถูกตัด");
         },
@@ -256,6 +259,7 @@ export default function BleDevicesPanel() {
     if (iotDeviceRef.current?.gatt?.connected)
       iotDeviceRef.current.gatt.disconnect();
     iotDeviceRef.current = null;
+    setIotConnected(false);
     setIotBusy(false);
     setIotCapabilities([]);
     setIotStatus("Not connected / ยังไม่เชื่อมต่อ");
@@ -285,11 +289,13 @@ export default function BleDevicesPanel() {
         optionalServices: [service],
       });
       iotDeviceRef.current = device;
+      setIotConnected(true);
       device.addEventListener(
         "gattserverdisconnected",
         () => {
           iotCharacteristicRef.current = null;
           iotDeviceRef.current = null;
+          setIotConnected(false);
           setIotBusy(false);
           setIotCapabilities([]);
           setIotStatus("Disconnected / การเชื่อมต่อถูกตัด");
@@ -502,7 +508,7 @@ export default function BleDevicesPanel() {
             <button
               type="button"
               className="secondary"
-              disabled={!heartDeviceRef.current}
+              disabled={!heartConnected}
               onClick={disconnectHeartRate}
             >
               Disconnect
@@ -574,7 +580,7 @@ export default function BleDevicesPanel() {
             <button
               type="button"
               className="secondary"
-              disabled={!iotCharacteristicRef.current?.properties.read}
+              disabled={!iotCapabilities.includes("Read")}
               onClick={readIot}
             >
               Read
@@ -582,7 +588,7 @@ export default function BleDevicesPanel() {
             <button
               type="button"
               className="secondary"
-              disabled={!iotDeviceRef.current}
+              disabled={!iotConnected}
               onClick={disconnectIot}
             >
               Disconnect
@@ -648,11 +654,7 @@ export default function BleDevicesPanel() {
           <button
             id="writeIotBtn"
             type="button"
-            disabled={
-              !iotCharacteristicRef.current ||
-              (!iotCharacteristicRef.current.properties.write &&
-                !iotCharacteristicRef.current.properties.writeWithoutResponse)
-            }
+            disabled={!iotCapabilities.some((capability) => capability.startsWith("Write"))}
             onClick={writeIot}
           >
             Write / ส่งคำสั่ง

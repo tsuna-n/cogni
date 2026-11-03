@@ -10,7 +10,7 @@ export default function WorkspacePageHeading({
   return (
     <div className="workspace-page-heading" data-no-translate>
       <div className="workspace-page-breadcrumb">
-        {locale === "th" ? "พื้นที่วิจัย" : "Research workspace"}
+        {locale === "th" ? "พื้นที่กิจกรรม" : "Activity workspace"}
         <span>/</span>
         {title}
       </div>

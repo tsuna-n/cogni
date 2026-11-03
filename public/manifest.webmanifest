@@ -1,7 +1,7 @@
 {
-  "name": "CogniLoad-XAI Muse EEG Research",
+  "name": "CogniLoad-XAI Activities",
   "short_name": "CogniLoad-XAI",
-  "description": "Muse 2 EEG research sessions with baseline, task, rest, event markers and CSV export.",
+  "description": "Activities, assessments, progress tracking, and CSV export.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

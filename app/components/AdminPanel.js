@@ -10,7 +10,7 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
   const [selected, setSelected] = useState("");
   const [records, setRecords] = useState([]);
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [studyDraft, setStudyDraft] = useState(null);
@@ -30,8 +30,6 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    setLoading(true);
-    setError("");
     load(`/api/admin/participants?q=${encodeURIComponent(query)}`).then((data) => {
       if (active) setParticipants(data.participants);
     }).catch((cause) => { if (active) setError(cause.message); }).finally(() => { if (active) setLoading(false); });
@@ -41,7 +39,6 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    setSettingsError("");
     load("/api/admin/settings").then((data) => {
       if (!active) return;
       setStudyDraft(data.study);
@@ -127,22 +124,19 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
   useEffect(() => {
     if (!enabled || !selected) return;
     let active = true;
-    setLoading(true);
-    setError("");
     Promise.all([load(`/api/admin/participants/${encodeURIComponent(selected)}`), load("/api/dashboard/users")]).then(([data, accounts]) => {
       if (active) { setRecords(data.records); setUsers(accounts.users); }
     }).catch((cause) => { if (active) { setRecords([]); setUsers([]); setError(cause.message); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [enabled, selected, refresh, load]);
 
-  useEffect(() => {
-    if (!enabled) { setSelected(""); setParticipants([]); setRecords([]); setUsers([]); setStudyDraft(null); }
-  }, [enabled]);
-
   const sessions = records.map((record) => ({ id: record.recordId, ...record.summary, summary: record.summary, uploadedBy: record.uploadedBy }));
   const plannedSeconds = studyDraft ? Number(studyDraft.baselineSeconds) + Number(studyDraft.defaultTaskSeconds) + Number(studyDraft.postTaskSeconds) : 0;
   const refreshData = () => {
     if (settingsDirty && !window.confirm(locale === "th" ? "โหลดข้อมูลล่าสุดและยกเลิกการตั้งค่าที่ยังไม่บันทึกหรือไม่?" : "Reload and discard unsaved settings?")) return;
+    setLoading(true);
+    setError("");
+    setSettingsError("");
     setRefresh((value) => value + 1);
   };
   const settingsErrorText = settingsError === "settings_unavailable" || settingsError === "storage_unavailable"
@@ -173,11 +167,11 @@ export default function AdminPanel({ locale = "th", enabled = false }) {
       {settingsMessage && <p className="study-message" role="status">{settingsMessage}</p>}
     </div>
     <div className="card study-card">
-      <div className="study-heading"><div><span className="study-kicker">ADMIN · PARTICIPANTS</span><h2>{locale === "th" ? "ข้อมูลรายรหัสผู้เข้าร่วม" : "Participant records"}</h2><p className="muted">{locale === "th" ? "ค้นหารหัสเพื่อดูผลสรุปทุกครั้งที่ทดลองและเปรียบเทียบสองรอบ ข้อมูล EEG ดิบอยู่ในเครื่องผู้วิจัย" : "Search an ID to see every session summary and compare two runs. Raw EEG remains on the researcher's device."}</p></div><button type="button" className="secondary" disabled={settingsBusy} onClick={refreshData}>{locale === "th" ? "รีเฟรช" : "Refresh"}</button></div>
-      <label className="admin-search">{locale === "th" ? "ค้นหารหัสผู้เข้าร่วม" : "Search participant ID"}<input value={query} onChange={(event) => setQuery(event.target.value)} maxLength={40} placeholder="P001" /></label>
+      <div className="study-heading"><div><span className="study-kicker">ADMIN · PARTICIPANTS</span><h2>{locale === "th" ? "ข้อมูลรายรหัสผู้เข้าร่วม" : "Participant records"}</h2><p className="muted">{locale === "th" ? "ค้นหารหัสเพื่อดูผลสรุปทุกครั้งที่ทดลองและเปรียบเทียบสองรอบ ข้อมูลดิบอยู่ในเครื่องผู้วิจัย" : "Search an ID to see every session summary and compare two runs. Raw data remains on the researcher's device."}</p></div><button type="button" className="secondary" disabled={settingsBusy} onClick={refreshData}>{locale === "th" ? "รีเฟรช" : "Refresh"}</button></div>
+      <label className="admin-search">{locale === "th" ? "ค้นหารหัสผู้เข้าร่วม" : "Search participant ID"}<input value={query} onChange={(event) => { setQuery(event.target.value); setLoading(true); setError(""); }} maxLength={40} placeholder="P001" /></label>
       {error && <p className="study-signal-warning" role="alert">{error}</p>}
       <p className="muted" role="status">{loading ? (locale === "th" ? "กำลังโหลด…" : "Loading…") : `${participants.length} ${locale === "th" ? "รหัส" : "IDs"}`}</p>
-      <div className="admin-participants">{participants.map((item) => <button key={item.id} type="button" className={selected === item.id ? "active" : "secondary"} onClick={() => { setSelected(item.id); setRecords([]); }}>{item.id} <span>{item.sessionCount} {locale === "th" ? "รอบ" : "sessions"}</span></button>)}</div>
+      <div className="admin-participants">{participants.map((item) => <button key={item.id} type="button" className={selected === item.id ? "active" : "secondary"} onClick={() => { if (selected !== item.id) { setSelected(item.id); setRecords([]); setLoading(true); setError(""); } }}>{item.id} <span>{item.sessionCount} {locale === "th" ? "รอบ" : "sessions"}</span></button>)}</div>
     </div>
     {selected && <>
       <div className="card study-card"><h3>{locale === "th" ? "รหัสผู้เข้าร่วม" : "Participant ID"}: {selected}</h3><p className="muted">{records.length} {locale === "th" ? "รอบที่ซิงก์แล้ว" : "synced sessions"}</p>{records.length > 0 && <p className="muted">{locale === "th" ? "ผู้บันทึก" : "Uploaded by"}: {[...new Set(records.map((record) => record.uploadedBy))].join(", ")}</p>}</div>

@@ -101,7 +101,7 @@ for (const [stage, errorName, message, status] of [
     "start",
     "NetworkError",
     "EEG command write failed",
-    /EEG startup failed|เริ่ม EEG ไม่สำเร็จ/,
+    /Data startup failed|เริ่มรับข้อมูลไม่สำเร็จ/,
   ],
 ]) {
   test(`automatic ${stage} failure shows readable diagnostics and permits manual recovery`, async ({
@@ -118,7 +118,7 @@ for (const [stage, errorName, message, status] of [
     await mockMuse(page, stage);
     await page.goto("/");
     await page
-      .getByRole("button", { name: "ห้องทดลอง EEG", exact: true })
+      .getByRole("button", { name: "ห้องกิจกรรม", exact: true })
       .click();
     await expect(page.locator("#museErrorDetails")).toBeVisible();
     await expect(page.locator("#museErrorText")).toContainText(
@@ -128,7 +128,7 @@ for (const [stage, errorName, message, status] of [
       `Stage: ${stage}`,
     );
     await expect(page.locator("#museErrorText")).toContainText(
-      `${errorName}: ${message}`,
+      `${errorName}: ${message.replace(/\bEEG\b/gi, "device data")}`,
     );
     await expect(page.locator("#museStatus")).toContainText(status);
     if (stage === "service")

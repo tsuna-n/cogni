@@ -92,7 +92,7 @@ test("session history displays and exports profile Alpha/Beta by uploader in bot
     const rows = table.locator("tbody tr");
     await expect(rows.nth(0).getByRole("cell").nth(alpha)).toHaveText("12.345678");
     await expect(rows.nth(0).getByRole("cell").nth(beta)).toHaveText("0.000000");
-    await expect(rows.nth(0)).toContainText(measuredSource);
+    await expect(rows.nth(0)).toContainText(measuredSource.replace('EEG', 'อุปกรณ์'));
     await expect(rows.nth(1).getByRole("cell").nth(alpha)).toHaveText("2.500000");
     await expect(rows.nth(1).getByRole("cell").nth(beta)).toHaveText("1.250000");
     await expect(rows.nth(1)).toContainText(syntheticSource);
@@ -174,7 +174,7 @@ test("overview shows synced study data and links to profiles, results and settin
   await page.getByRole("button", { name: "ดูผลทั้งหมด", exact: true }).click();
   await expect(page.getByRole("tab", { name: "ผลการทดลอง", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("tab", { name: "ภาพรวม", exact: true }).click();
-  await page.getByRole("button", { name: "เปิดห้องทดลอง EEG", exact: true }).click();
+  await page.getByRole("button", { name: "เปิดห้องกิจกรรม", exact: true }).click();
   await expect(page.locator("#journey")).toHaveClass("active");
   expect(errors).toEqual([]);
 });

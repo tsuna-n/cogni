@@ -65,7 +65,7 @@ export default function ResearchDashboard({
   const [selectedDay, setSelectedDay] = useState("");
   const [calendarMonth, setCalendarMonth] = useState(null);
   const [guideOpen, setGuideOpen] = useState(false);
-  useEffect(() => setCalendarMonth(new Date()), []);
+  const [now, setNow] = useState(null);
   const dateLocale = locale === "th" ? "th-TH" : "en-US";
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState("");
@@ -73,12 +73,10 @@ export default function ResearchDashboard({
   const [backfilling, setBackfilling] = useState(0);
   const refreshId = useRef(0);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(() => {
     const requestId = ++refreshId.current;
-    try {
-      const saved = (await listResearchSessions()).filter((session) =>
-        isOwnedResearchSession(session, accountEmail),
-      );
+    return listResearchSessions().then(async (records) => {
+      const saved = records.filter((session) => isOwnedResearchSession(session, accountEmail));
       if (requestId !== refreshId.current) return;
       setSessions(
         saved.map((session) =>
@@ -124,20 +122,26 @@ export default function ResearchDashboard({
             setBackfilling((count) => Math.max(0, count - 1));
         }
       }
-    } catch (cause) {
+    }).catch((cause) => {
       if (requestId !== refreshId.current) return;
-      setError(`อ่านข้อมูลรอบ EEG ไม่สำเร็จ: ${cause.message}`);
+      setError(`อ่านข้อมูลรอบกิจกรรมไม่สำเร็จ: ${cause.message}`);
       setBackfilling(0);
-    } finally {
-      if (requestId === refreshId.current) setLoading(false);
-    }
+    }).finally(() => {
+      if (requestId !== refreshId.current) return;
+      const time = Date.now();
+      setNow(time);
+      setCalendarMonth((current) => current || new Date(time));
+      setLoading(false);
+    });
   }, [accountEmail]);
 
   useEffect(() => {
+    const requests = refreshId;
     refresh();
     window.addEventListener("research-dashboard-opened", refresh);
     window.addEventListener("research-session-finished", refresh);
     return () => {
+      ++requests.current;
       window.removeEventListener("research-dashboard-opened", refresh);
       window.removeEventListener("research-session-finished", refresh);
     };
@@ -154,7 +158,7 @@ export default function ResearchDashboard({
         .includes(search.toLowerCase().trim());
     const matchesPeriod =
       period === "all" ||
-      session.startedMs >= Date.now() - Number(period) * 86400000;
+      session.startedMs >= now - Number(period) * 86400000;
     return (
       matchesSearch &&
       matchesPeriod &&
@@ -219,12 +223,10 @@ export default function ResearchDashboard({
     openHistory();
   };
   const phaseColors = ["#3695f5", "#a07be9", "#28c7a0"];
-  let share = 0;
   const phaseGradient = phases
     ?.map((seconds, i) => {
-      const start = share;
-      share += (100 * seconds) / phaseTotal;
-      return `${phaseColors[i]} ${start}% ${share}%`;
+      const start = phases.slice(0, i).reduce((sum, value) => sum + value, 0);
+      return `${phaseColors[i]} ${(100 * start) / phaseTotal}% ${(100 * (start + seconds)) / phaseTotal}%`;
     })
     .join(", ");
   const statusGradient = filtered.length
@@ -260,8 +262,8 @@ export default function ResearchDashboard({
       </p>
       <small>
         {t(
-          "กราฟจะแสดงเมื่อบันทึก EEG ครบหนึ่งรอบ",
-          "Charts appear after a completed EEG recording",
+          "กราฟจะแสดงเมื่อบันทึกข้อมูลครบหนึ่งรอบ",
+          "Charts appear after a completed recording",
         )}
       </small>
     </div>
@@ -277,10 +279,10 @@ export default function ResearchDashboard({
       <div className="dash-heading">
         <div>
           <div className="dash-breadcrumb">
-            {t("พื้นที่วิจัย", "Research workspace")} <span>/</span>{" "}
+            {t("พื้นที่กิจกรรม", "Activity workspace")} <span>/</span>{" "}
             {t("ภาพรวม", "Overview")}
           </div>
-          <h1>{t("แดชบอร์ดการวิจัย", "Research dashboard")}</h1>
+          <h1>{t("แดชบอร์ดกิจกรรม", "Activity dashboard")}</h1>
         </div>
         <div className="dash-heading-actions">
           <span className="dash-local">
@@ -305,29 +307,29 @@ export default function ResearchDashboard({
         <div className="dash-main-column">
           <div className="dash-welcome">
             <div className="dash-welcome-copy">
-              <span className="dash-eyebrow">COGNILOAD · EEG RESEARCH</span>
+              <span className="dash-eyebrow">COGNILOAD · ACTIVITY WORKSPACE</span>
               <h2>
                 {t("ยินดีต้อนรับ", "Welcome back")}
                 {accountName ? `, ${accountName.split(" ")[0]}` : ""}
               </h2>
               <p>
                 {t(
-                  "บันทึกสัญญาณสมอง ติดตามภารกิจ และทบทวนผลการทดลอง",
-                  "Record brain signals, track tasks, and review your sessions.",
+                  "บันทึกกิจกรรม ติดตามความก้าวหน้า และทบทวนผลของคุณ",
+                  "Record activities, track progress, and review your results.",
                 )}
               </p>
               <button
                 className="dash-text-link"
                 onClick={() => navigate("journey")}
               >
-                {t("เริ่มรอบทดลอง EEG", "Start an EEG session")}{" "}
+                {t("เริ่มรอบกิจกรรม", "Start an activity session")}{" "}
                 <Icon name="arrow" size={16} />
               </button>
             </div>
             <div className="dash-welcome-caption">
               <Icon name="pulse" size={26} />
               <span>
-                EEG RESEARCH
+                ACTIVITY WORKSPACE
                 <br />
                 <strong>Baseline · Task · Rest</strong>
               </span>
@@ -336,7 +338,7 @@ export default function ResearchDashboard({
           <div className="dash-filter-row">
             <span>
               <Icon name="grid" size={15} />
-              {t("ภาพรวมข้อมูลการทดลอง", "Your research at a glance")}
+              {t("ภาพรวมข้อมูลการทดลอง", "Your activities at a glance")}
             </span>
             <div>
               {selectedDay && (
@@ -352,7 +354,7 @@ export default function ResearchDashboard({
                 <select
                   aria-label={t("ช่วงเวลาข้อมูล", "Data period")}
                   value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
+                  onChange={(e) => { setPeriod(e.target.value); setNow(Date.now()); }}
                 >
                   <option value="all">{t("ทุกช่วงเวลา", "All time")}</option>
                   <option value="30">
@@ -394,7 +396,7 @@ export default function ResearchDashboard({
               [
                 "pulse",
                 "orange",
-                "EEG samples",
+                "Samples",
                 number(sampleTotal),
                 "",
                 t("จากรอบทดลองที่บันทึกครบ", "From completed sessions"),
@@ -463,7 +465,7 @@ export default function ResearchDashboard({
                     [
                       "pulse",
                       t("เชื่อมต่อ Muse", "Connect Muse"),
-                      t("ตรวจสัญญาณ EEG ทั้ง 4 ช่อง", "Check all four EEG channels"),
+                      t("ตรวจสัญญาณจากอุปกรณ์ทั้ง 4 ช่อง", "Check all four channels"),
                     ],
                     [
                       "flask",
@@ -490,7 +492,7 @@ export default function ResearchDashboard({
               <div className="dash-chart-row">
                 <div className="dash-panel dash-trend">
                   <div className="dash-panel-title">
-                    <h3>{t("แนวโน้มอัตราสัญญาณ EEG", "EEG sampling trend")}</h3>
+                    <h3>{t("แนวโน้มอัตราสัญญาณจากอุปกรณ์", "Sampling trend")}</h3>
                     <span>{t("8 รอบล่าสุด", "Last 8 sessions")}</span>
                   </div>
                   <div className="dash-chart-subtitle">
@@ -512,8 +514,8 @@ export default function ResearchDashboard({
                       viewBox="0 0 345 163"
                       role="img"
                       aria-label={t(
-                        "อัตราตัวอย่าง EEG ตามรอบทดลอง หน่วย Hz",
-                        "EEG sample rate per session in Hz",
+                        "อัตราตัวอย่าง ตามรอบทดลอง หน่วย Hz",
+                        "Sample rate per session in Hz",
                       )}
                     >
                       <defs>
@@ -595,7 +597,7 @@ export default function ResearchDashboard({
                     <span>{t("รอบล่าสุด", "Latest")}</span>
                   </div>
                   <div className="dash-mini-legend">
-                    <i className="dash-dot blue" /> EEG samples{" "}
+                    <i className="dash-dot blue" /> Samples{" "}
                     <span>Muse · 4 channels</span>
                   </div>
                   {latest && latestSamples.some(Boolean) ? (
@@ -685,7 +687,7 @@ export default function ResearchDashboard({
                         <tr>
                           <th>{t("ผู้เข้าร่วม / รอบ", "Participant / session")}</th>
                           <th>{t("วันที่", "Date")}</th>
-                          <th>{t("อัตรา EEG", "EEG rate")}</th>
+                          <th>{t("อัตราข้อมูล", "Sample rate")}</th>
                           <th>{t("สถานะ", "Status")}</th>
                         </tr>
                       </thead>
@@ -859,7 +861,7 @@ export default function ResearchDashboard({
                   </span>
                   <div>
                     <small>
-                      {t("ข้อมูล EEG ครบทุกช่อง", "Recorded EEG samples")}
+                      {t("ข้อมูลครบทุกช่อง", "Recorded samples")}
                     </small>
                     <strong>{number(sampleTotal)}</strong>
                   </div>
@@ -891,14 +893,14 @@ export default function ResearchDashboard({
               <div className="dash-panel-title">
                 <h3>
                   <Icon name="flask" size={16} />
-                  {t("เครื่องมือการวิจัย", "Research tools")}
+                  {t("เครื่องมือกิจกรรม", "Activity tools")}
                 </h3>
               </div>
               {[
                 [
                   "journey",
                   "pulse",
-                  t("เชื่อมต่อและบันทึก EEG", "Connect & record EEG"),
+                  t("เชื่อมต่อและบันทึกข้อมูล", "Connect & record data"),
                   "blue",
                 ],
                 [
@@ -945,8 +947,8 @@ export default function ResearchDashboard({
               </div>
               <p>
                 {t(
-                  "บันทึกเหตุการณ์พร้อมสัญญาณ EEG ในทุกช่วงของการทดลอง",
-                  "Capture event markers alongside EEG through every phase.",
+                  "บันทึกเหตุการณ์พร้อมสัญญาณจากอุปกรณ์ในทุกช่วงของการทดลอง",
+                  "Capture event markers alongside data through every phase.",
                 )}
               </p>
               <button
@@ -961,7 +963,7 @@ export default function ResearchDashboard({
         </div>
         <aside
           className="dash-right-column"
-          aria-label={t("ข้อมูลประกอบการวิจัย", "Research information")}
+          aria-label={t("ข้อมูลประกอบกิจกรรม", "Activity information")}
         >
           <div className="dash-panel dash-notices">
             <div className="dash-panel-title">
@@ -986,7 +988,7 @@ export default function ResearchDashboard({
               [
                 "pulse",
                 "blue",
-                t("ตรวจสัญญาณทั้ง 4 ช่อง", "Check all 4 EEG channels"),
+                t("ตรวจสัญญาณทั้ง 4 ช่อง", "Check all 4 channels"),
                 "TP9 · AF7 · AF8 · TP10",
               ],
               [
@@ -1065,7 +1067,7 @@ export default function ResearchDashboard({
                 const count = sessions.filter(
                   (s) => dayKey(s.startedMs) === key,
                 ).length;
-                const today = calendarMonth && key === dayKey(Date.now());
+                const today = now && key === dayKey(now);
                 return (
                   <button
                     key={key}
@@ -1100,7 +1102,7 @@ export default function ResearchDashboard({
                   <Icon name="brain" size={23} />
                 </span>
                 <span>
-                  {t("ผู้ช่วยการวิจัย", "Research companion")}
+                  {t("ผู้ช่วยกิจกรรม", "Activity companion")}
                   <small>RECORDING INSIGHTS</small>
                 </span>
                 <i className="dash-dot green" />
@@ -1119,7 +1121,7 @@ export default function ResearchDashboard({
                 </span>
                 {latest
                   ? t("สรุปการบันทึกล่าสุด", "Latest recording summary")
-                  : t("เริ่มต้นการวิจัยของคุณ", "Start your research")}
+                  : t("เริ่มต้นกิจกรรมของคุณ", "Start your activities")}
               </strong>
               {latest ? (
                 <ul>
@@ -1177,8 +1179,8 @@ export default function ResearchDashboard({
             {guideOpen && (
               <p className="dash-guide-copy">
                 {t(
-                  "อ่านข้อมูลจริงจากรอบ EEG ของบัญชีนี้ในเบราว์เซอร์ปัจจุบัน กราฟใช้เฉพาะรอบที่บันทึกครบและไม่ใช่รอบทดสอบอุปกรณ์ ผลเกมแสดงเฉพาะรอบที่มีคะแนนบันทึกไว้",
-                  "Data comes from this account’s EEG sessions stored in this browser. Charts use completed sessions and exclude device tests. Task scores appear only when recorded.",
+                  "อ่านข้อมูลจริงจากรอบกิจกรรมของบัญชีนี้ในเบราว์เซอร์ปัจจุบัน กราฟใช้เฉพาะรอบที่บันทึกครบและไม่ใช่รอบทดสอบอุปกรณ์ ผลเกมแสดงเฉพาะรอบที่มีคะแนนบันทึกไว้",
+                  "Data comes from this account’s activity sessions stored in this browser. Charts use completed sessions and exclude device tests. Task scores appear only when recorded.",
                 )}
               </p>
             )}
@@ -1199,7 +1201,7 @@ export default function ResearchDashboard({
       </div>
       <div className="dash-footer">
         <span>
-          CogniLoad-XAI <i>·</i> Muse EEG Research Workspace
+          CogniLoad-XAI <i>·</i> Activity Workspace
         </span>
         <span>
           {t(

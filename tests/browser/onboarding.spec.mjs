@@ -81,7 +81,7 @@ test('first login cannot skip screening; failed confirmation stays locked; saved
 
 test('setup and legacy inputs autosave, restore and stay isolated between accounts', async ({ page }) => {
   const state = await workspace(page, { confirmed: true });
-  await page.getByRole('button', { name: 'ห้องทดลอง EEG', exact: true }).click();
+  await page.getByRole('button', { name: 'ห้องกิจกรรม', exact: true }).click();
   const setup = page.locator('.study-workspace');
   await expect(setup.getByLabel('รหัสผู้เข้าร่วม *', { exact: true })).toHaveValue('P001');
   await expect(setup.getByLabel('รหัสผู้เข้าร่วม *', { exact: true })).toHaveAttribute('readonly', '');
@@ -109,7 +109,7 @@ test('setup and legacy inputs autosave, restore and stay isolated between accoun
   await page.locator('#mcdate').fill('2026-10-03');
   await expect.poll(() => state.forms().workspace?.fields?.['cogscreen:mcdate']).toBe('2026-10-03');
   await page.reload();
-  await page.getByRole('button', { name: 'ห้องทดลอง EEG', exact: true }).click();
+  await page.getByRole('button', { name: 'ห้องกิจกรรม', exact: true }).click();
   await expect(setup.getByLabel('รหัสรอบทดลอง *', { exact: true })).toHaveValue('S09');
   await expect(setup.getByLabel('เงื่อนไขการทดลอง', { exact: true })).toHaveValue('memory');
   await expect(setup.locator('.study-durations input')).toHaveValue('95');

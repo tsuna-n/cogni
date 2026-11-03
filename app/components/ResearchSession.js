@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import GameSequenceControls from "./GameSequenceControls";
 import {
@@ -59,12 +59,18 @@ function filePart(value) {
   );
 }
 
+function snapshot(data) {
+  const { rows, nextSequence, lastIndices, ...saved } = data;
+  return { ...saved, nextSequence };
+}
+
 export default function ResearchSession({
   locale = "th",
   enabled = false,
   accountEmail = "",
   accountData = null,
   initialSetup = null,
+  sequenceHost = null,
   isAdmin = false,
   studyConfig = null,
   configError = "",
@@ -74,7 +80,6 @@ export default function ResearchSession({
   const [studyGroup, setStudyGroup] = useState(initialSetup?.studyGroup ?? accountData?.profile?.studyGroup ?? "");
   const [gameId, setGameId] = useState(1);
   const [sequence, setSequence] = useState(null);
-  const [sequenceHost, setSequenceHost] = useState(null);
   const [recordSaved, setRecordSaved] = useState(false);
   const startingRef = useRef(false);
   const [condition, setCondition] = useState(initialSetup?.condition ?? "standard");
@@ -85,7 +90,8 @@ export default function ResearchSession({
   const [status, setStatus] = useState("idle");
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [clock, setClock] = useState(0);
-  const [, setViewTick] = useState(0);
+  const [data, setData] = useState(null);
+  const [viewTime, setViewTime] = useState(0);
   const [markerText, setMarkerText] = useState(initialSetup?.markerText ?? "");
   const [message, setMessage] = useState("");
   const [exported, setExported] = useState(false);
@@ -108,20 +114,13 @@ export default function ResearchSession({
   const recentPacketsRef = useRef(CHANNELS.map(() => []));
   const lastChannelAtRef = useRef([0, 0, 0, 0]);
   const readyRef = useRef(false);
-  const finishRef = useRef(null);
-  const advanceRef = useRef(null);
-  const markerRef = useRef(null);
-  const previousDefaultTaskRef = useRef(null);
+  const [previousStudyConfig, setPreviousStudyConfig] = useState(null);
 
   useEffect(() => {
     if (!accountEmail || !studyConfig) return;
     queueFormSave(accountEmail, 'setup', { participant, sessionId, studyGroup, condition, taskSeconds, consent, markerText,
       baselineSeconds: studyConfig.baselineSeconds, postTaskSeconds: studyConfig.postTaskSeconds, protocolVersion: studyConfig.protocolVersion });
   }, [accountEmail, studyConfig, status, participant, sessionId, studyGroup, condition, taskSeconds, consent, markerText]);
-
-  useEffect(() => {
-    setSequenceHost(document.getElementById("gameSequenceControls"));
-  }, []);
 
   useEffect(() => {
     window.__studySequence = sequence
@@ -137,25 +136,21 @@ export default function ResearchSession({
     };
   }, [sequence, gameId, status]);
 
-  useEffect(() => {
-    if (!studyConfig || status !== "idle") return;
-    if (previousDefaultTaskRef.current !== studyConfig.defaultTaskSeconds && !(previousDefaultTaskRef.current === null && initialSetup?.taskSeconds != null))
+  if (studyConfig && status === "idle" && previousStudyConfig !== studyConfig) {
+    if (previousStudyConfig?.defaultTaskSeconds !== studyConfig.defaultTaskSeconds && !(previousStudyConfig === null && initialSetup?.taskSeconds != null))
       setTaskSeconds(studyConfig.defaultTaskSeconds);
-    else
-      setTaskSeconds((current) =>
-        Number(current) > studyConfig.maxTaskSeconds
-          ? studyConfig.maxTaskSeconds
-          : current,
-      );
-    previousDefaultTaskRef.current = studyConfig.defaultTaskSeconds;
-  }, [studyConfig, initialSetup?.taskSeconds, status]);
-
-  function snapshot(data) {
-    const { rows, nextSequence, lastIndices, ...saved } = data;
-    return { ...saved, nextSequence };
+    else if (Number(taskSeconds) > studyConfig.maxTaskSeconds)
+      setTaskSeconds(studyConfig.maxTaskSeconds);
+    setPreviousStudyConfig(studyConfig);
   }
 
-  function persist(force = false) {
+  const updateView = useCallback(() => {
+    const current = dataRef.current;
+    setData(current ? structuredClone(snapshot(current)) : null);
+    setViewTime(Date.now());
+  }, []);
+
+  const persist = useCallback((force = false) => {
     const data = dataRef.current;
     if (!data || (!force && data.rows.length < 512))
       return writeQueueRef.current;
@@ -178,12 +173,13 @@ export default function ResearchSession({
         setStatus("storage_error");
         setRecordSaved(false);
         setStorageReady(false);
+        updateView();
         setMessage(
           `บันทึกลงเครื่องไม่สำเร็จ (${error.message}) โปรดส่งออกข้อมูลที่ยังอยู่ในแท็บทันที`,
         );
       });
     return writeQueueRef.current;
-  }
+  }, [updateView]);
 
   useEffect(() => {
     if (!accountEmail) return;
@@ -224,6 +220,7 @@ export default function ResearchSession({
               });
           }
           dataRef.current = recovered;
+          updateView();
           setStatus(recovered.status);
           setParticipant(
             accountData?.role === 'user' ? accountData.participantId : recovered.participant === "TEST" ? initialSetup?.participant || accountData?.participantId || "" : recovered.participant || "",
@@ -250,7 +247,7 @@ export default function ResearchSession({
           setExported(Boolean(recovered.exported));
           setMessage(
             recovered.sequenceId
-              ? "กู้ชุดทดลองเดิมแล้ว ใช้ปุ่มลำดับเกมเพื่อทำต่อ ข้อมูล EEG ของแต่ละเกมยังเก็บอยู่ในเครื่อง / Previous game sequence restored. Continue using the game controls. Each EEG recording remains saved on this device."
+              ? "กู้ชุดทดลองเดิมแล้ว ใช้ปุ่มลำดับเกมเพื่อทำต่อ ข้อมูลของแต่ละเกมยังเก็บอยู่ในเครื่อง / Previous game sequence restored. Continue using the game controls. Each recording remains saved on this device."
               : "พบข้อมูลรอบก่อนในเครื่อง กรุณาส่งออก CSV แล้วจึงเริ่มรอบใหม่",
           );
         }
@@ -261,9 +258,9 @@ export default function ResearchSession({
     return () => {
       mounted = false;
     };
-  }, [accountEmail]);
+  }, [accountEmail, accountData?.role, accountData?.participantId, initialSetup?.participant, updateView]);
 
-  async function syncPending() {
+  const syncPending = useCallback(async () => {
     if (!enabled || !accountEmail) return;
     const run = syncRef.current.then(async () => {
       setSyncing(true);
@@ -334,7 +331,7 @@ export default function ResearchSession({
     });
     syncRef.current = run.catch(() => {});
     await run;
-  }
+  }, [enabled, accountEmail]);
 
   useEffect(() => {
     if (!enabled || !storageReady) return;
@@ -343,9 +340,7 @@ export default function ResearchSession({
     window.addEventListener("research-session-finished", onFinished);
     return () =>
       window.removeEventListener("research-session-finished", onFinished);
-    // Sync is intentionally tied to the authenticated account, not each local list update.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, storageReady, accountEmail]);
+  }, [enabled, storageReady, syncPending]);
 
   function addMarker(
     label,
@@ -373,6 +368,7 @@ export default function ResearchSession({
     );
     data.events++;
     persist();
+    updateView();
   }
 
   function finish(reason) {
@@ -397,6 +393,7 @@ export default function ResearchSession({
     dataRef.current.status = reason;
     dataRef.current.endedMs = Date.now();
     dataRef.current.summary = summarizeResearchSession(dataRef.current);
+    updateView();
     window.__studyPhase = null;
     window.__studyGameId = null;
     setStatus(reason);
@@ -427,7 +424,7 @@ export default function ResearchSession({
       reason === "disconnect"
         ? "Muse ขาดการเชื่อมต่อ ข้อมูลที่บันทึกไว้ยังส่งออกได้"
         : reason === "signal_lost"
-          ? "สัญญาณ EEG หายเกิน 3 วินาที การทดลองหยุดแล้ว"
+          ? "สัญญาณจากอุปกรณ์หายเกิน 3 วินาที การทดลองหยุดแล้ว"
           : reason === "hidden"
             ? "แท็บถูกซ่อนระหว่างบันทึก การทดลองหยุดเพื่อรักษาความถูกต้องของเวลา"
             : reason === "task_screen_left"
@@ -438,7 +435,7 @@ export default function ResearchSession({
                   ? "บันทึกครบ แต่สัญญาณบางช่องชนขอบช่วงวัด กรุณาปรับเซนเซอร์และทดสอบซ้ำก่อนเก็บผู้เข้าร่วม"
                   : reason === "complete"
                     ? finishedRecord.sequenceId
-                      ? "บันทึกครบทุกช่วงแล้ว EEG ของเกมนี้เก็บแยกไว้ในเครื่อง / All phases recorded. This game's EEG is saved separately on this device."
+                      ? "บันทึกครบทุกช่วงแล้ว ข้อมูลของเกมนี้เก็บแยกไว้ในเครื่อง / All phases recorded. This game's data is saved separately on this device."
                       : "ครบทุกช่วงแล้ว กรุณาส่งออก CSV"
                     : finishedRecord.sequenceId
                       ? "หยุดการทดลองแล้ว กำลังเก็บข้อมูลบางส่วนของเกมนี้ / Recording stopped. Saving this game's partial data."
@@ -498,13 +495,11 @@ export default function ResearchSession({
     }
   }
 
-  finishRef.current = finish;
-  advanceRef.current = advance;
-  markerRef.current = addMarker;
+  const onFinish = useEffectEvent(finish);
+  const onAdvance = useEffectEvent(advance);
+  const onMarker = useEffectEvent(addMarker);
 
   useEffect(() => {
-    readyRef.current = false;
-    setReady(false);
     const onStatus = (event) => {
       if (!event.detail?.ready) {
         readyRef.current = false;
@@ -512,7 +507,7 @@ export default function ResearchSession({
         recentPacketsRef.current = CHANNELS.map(() => []);
         setLiveRailPercents([0, 0, 0, 0]);
         setReady(false);
-        if (activeRef.current) finishRef.current("disconnect");
+        if (activeRef.current) onFinish("disconnect");
       }
     };
     const onReading = (event) => {
@@ -548,7 +543,7 @@ export default function ResearchSession({
         setLiveRailPercents(percents);
         if (percents.every((value) => value < 1))
           setMessage((previous) =>
-            previous.startsWith("สัญญาณ EEG ล่าสุดชนขอบ") ? "" : previous,
+            previous.startsWith("สัญญาณจากอุปกรณ์ล่าสุดชนขอบ") ? "" : previous,
           );
       }
       lastChannelAtRef.current[channel] = now;
@@ -618,7 +613,7 @@ export default function ResearchSession({
       persist();
       if (receivedAt - lastViewRef.current > 500) {
         lastViewRef.current = receivedAt;
-        setViewTick((n) => n + 1);
+        updateView();
       }
     };
     const timer = setInterval(() => {
@@ -628,7 +623,7 @@ export default function ResearchSession({
       ) {
         readyRef.current = false;
         setReady(false);
-        if (activeRef.current) finishRef.current("signal_lost");
+        if (activeRef.current) onFinish("signal_lost");
       }
       if (!activeRef.current || !dataRef.current) return;
       if (Date.now() - lastPersistRef.current >= 1000) {
@@ -639,15 +634,16 @@ export default function ResearchSession({
       if (Date.now() - lastClockViewRef.current >= 200) {
         lastClockViewRef.current = Date.now();
         setClock(elapsed);
+        setViewTime(Date.now());
       }
       if (elapsed >= dataRef.current.durations[phaseRef.current])
-        advanceRef.current();
+        onAdvance();
     }, 50);
     const onVisibility = () => {
-      if (document.hidden && activeRef.current) finishRef.current("hidden");
+      if (document.hidden && activeRef.current) onFinish("hidden");
     };
     const onPageHide = () => {
-      if (activeRef.current) finishRef.current("hidden");
+      if (activeRef.current) onFinish("hidden");
       else if (dataRef.current?.rows.length) persist(true);
     };
     const onTaskMarker = (event) => {
@@ -657,15 +653,15 @@ export default function ResearchSession({
           dataRef.current.gameStartedAtMs = Date.now();
         const gameSummary = parseGameSummaryMarker(label);
         if (gameSummary) dataRef.current.gameSummary = gameSummary;
-        markerRef.current(label);
+        onMarker(label);
       }
     };
     const onTaskScreenLeft = () => {
       if (activeRef.current && phaseRef.current === 1)
-        finishRef.current("task_screen_left");
+        onFinish("task_screen_left");
     };
     const onTaskComplete = () => {
-      if (activeRef.current && phaseRef.current === 1) advanceRef.current();
+      if (activeRef.current && phaseRef.current === 1) onAdvance();
     };
     window.addEventListener("muse-study-status", onStatus);
     window.addEventListener("muse-study-reading", onReading);
@@ -684,7 +680,7 @@ export default function ResearchSession({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, []);
+  }, [persist, updateView]);
 
   useEffect(() => {
     window.__studyUnexported = Boolean(
@@ -709,8 +705,8 @@ export default function ResearchSession({
         status === "recording"
           ? `${PHASES[phaseIndex].label} · ${Math.max(0, Math.ceil((dataRef.current?.durations[phaseIndex] || 0) - clock))}s`
           : status === "idle"
-            ? "Muse EEG Research Workspace"
-            : "EEG session · ready to export";
+            ? "CogniLoad Activity Workspace"
+            : "Activity session · ready to export";
   }, [status, phaseIndex, clock]);
 
   async function start(
@@ -775,7 +771,7 @@ export default function ResearchSession({
         !ready ||
         lastChannelAtRef.current.some((at) => Date.now() - at > 3000)
       ) {
-        setMessage("เชื่อมต่อ Muse และรอรับ EEG ครบทั้ง 4 ช่องก่อนเริ่ม");
+        setMessage("เชื่อมต่อ Muse และรอรับสัญญาณครบทั้ง 4 ช่องก่อนเริ่ม");
         return;
       }
       if (!storageReady) {
@@ -791,13 +787,13 @@ export default function ResearchSession({
         }));
         if (recentQuality.some(({ count }) => count < SAMPLE_RATE)) {
           setMessage(
-            "รอสัญญาณ EEG ต่อเนื่องอย่างน้อย 1 วินาทีครบทั้ง 4 ช่องก่อนเริ่มรอบผู้เข้าร่วม",
+            "รอสัญญาณจากอุปกรณ์ต่อเนื่องอย่างน้อย 1 วินาทีครบทั้ง 4 ช่องก่อนเริ่มรอบผู้เข้าร่วม",
           );
           return;
         }
         if (recentQuality.some(({ count, rail }) => rail / count >= 0.01)) {
           setMessage(
-            "สัญญาณ EEG ล่าสุดชนขอบช่วงวัด กรุณาปรับเซนเซอร์แล้วทดสอบอุปกรณ์ใหม่ก่อนเริ่มรอบผู้เข้าร่วม",
+            "สัญญาณจากอุปกรณ์ล่าสุดชนขอบช่วงวัด กรุณาปรับเซนเซอร์แล้วทดสอบอุปกรณ์ใหม่ก่อนเริ่มรอบผู้เข้าร่วม",
           );
           return;
         }
@@ -908,7 +904,7 @@ export default function ResearchSession({
       setMessage(
         testMode
           ? "กำลังทดสอบอุปกรณ์ 15 วินาที ข้อมูลชุดนี้ระบุ test_mode=true"
-          : "กำลังบันทึก EEG ลงที่เก็บข้อมูลในเบราว์เซอร์อัตโนมัติ",
+          : "กำลังบันทึกข้อมูลลงที่เก็บข้อมูลในเบราว์เซอร์อัตโนมัติ",
       );
       addMarker("session_start", "baseline", startedMs);
       addMarker("baseline_start", "baseline", startedMs);
@@ -981,10 +977,13 @@ export default function ResearchSession({
       link.download = `muse_${filePart(data.participant)}_${filePart(data.sessionId)}_${new Date(data.startedMs).toISOString().replaceAll(":", "-")}.csv`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      data.exported = true;
-      await saveResearchSession(snapshot(data), data.nextSequence, []);
+      await saveResearchSession({ ...snapshot(data), exported: true }, data.nextSequence, []);
       setSavedSessions(await listResearchSessions());
-      if (target === dataRef.current) setExported(true);
+      if (target === dataRef.current) {
+        dataRef.current.exported = true;
+        setExported(true);
+        updateView();
+      }
       window.__studyUnexported = false;
       setMessage(
         "สั่งดาวน์โหลด CSV แล้ว ตรวจสอบไฟล์ใน Downloads ก่อนลบข้อมูลที่เก็บในเบราว์เซอร์",
@@ -1005,8 +1004,8 @@ export default function ResearchSession({
       session.rawDeleted ||
       !window.confirm(
         locale === "th"
-          ? `ลบ EEG ดิบของรอบ ${session.sessionId} หรือไม่? ระบบจะเก็บผลสรุปไว้เพื่อเปรียบเทียบ`
-          : `Delete raw EEG for session ${session.sessionId}? Its summary will remain for comparison.`,
+          ? `ลบข้อมูลดิบของรอบ ${session.sessionId} หรือไม่? ระบบจะเก็บผลสรุปไว้เพื่อเปรียบเทียบ`
+          : `Delete raw data for session ${session.sessionId}? Its summary will remain for comparison.`,
       )
     )
       return;
@@ -1026,12 +1025,12 @@ export default function ResearchSession({
       });
       if (dataRef.current?.id === session.id) {
         dataRef.current.rawDeleted = true;
-        setViewTick((value) => value + 1);
+        updateView();
       }
       setSavedSessions(await listResearchSessions());
       window.dispatchEvent(new Event("research-session-finished"));
     } catch (error) {
-      setMessage(`ลบ EEG ดิบไม่สำเร็จ: ${error.message}`);
+      setMessage(`ลบข้อมูลดิบไม่สำเร็จ: ${error.message}`);
     } finally {
       setBusy(false);
     }
@@ -1116,6 +1115,7 @@ export default function ResearchSession({
     )
       return;
     dataRef.current = null;
+    updateView();
     setSequence(null);
     setGameId(1);
     setRecordSaved(false);
@@ -1127,7 +1127,6 @@ export default function ResearchSession({
     setMessage("");
   }
 
-  const data = dataRef.current;
   const ownedSavedSessions = savedSessions.filter((session) =>
     isOwnedResearchSession(session, accountEmail),
   );
@@ -1256,7 +1255,7 @@ export default function ResearchSession({
                 และบันทึกความยินยอมตามเอกสารโครงการ
               </p>
             </div>
-            <span className="pill">Muse 2 / Muse S · 4 EEG channels</span>
+            <span className="pill">Muse 2 / Muse S · 4 channels</span>
           </div>
           <div className="study-form">
             <label>
@@ -1344,8 +1343,8 @@ export default function ResearchSession({
           </div>
           <p className="muted" style={{ fontSize: "12px", margin: "10px 0 0" }}>
             {locale === "th"
-              ? `EEG บันทึกต่อเนื่อง: พักนิ่ง ${shownDurations[0]} วินาที → ทำกิจกรรมจนกว่าจะกดจบหรือครบเวลาที่ตั้ง → พักหลังงานอีก ${shownDurations[2]} วินาที · ทำเกม 1 → 2 → 3 ด้วยปุ่ม Next และแยก EEG แต่ละเกม · เวลารวมสูงสุด 600 วินาที · โปรโตคอล ${shownProtocolVersion}`
-              : `Continuous EEG: ${shownDurations[0]} seconds of baseline → task until completed or timed out → ${shownDurations[2]} seconds of rest · Next advances through games 1 → 2 → 3, with separate EEG recordings · 600-second planned maximum · protocol ${shownProtocolVersion}`}
+              ? `บันทึกข้อมูลต่อเนื่อง: พักนิ่ง ${shownDurations[0]} วินาที → ทำกิจกรรมจนกว่าจะกดจบหรือครบเวลาที่ตั้ง → พักหลังงานอีก ${shownDurations[2]} วินาที · ทำเกม 1 → 2 → 3 ด้วยปุ่ม Next และแยกข้อมูลแต่ละเกม · เวลารวมสูงสุด 600 วินาที · โปรโตคอล ${shownProtocolVersion}`
+              : `Continuous recording: ${shownDurations[0]} seconds of baseline → task until completed or timed out → ${shownDurations[2]} seconds of rest · Next advances through games 1 → 2 → 3, with separate data recordings · 600-second planned maximum · protocol ${shownProtocolVersion}`}
           </p>
           <label className="study-consent">
             <input
@@ -1367,8 +1366,8 @@ export default function ResearchSession({
               <h2>ดำเนินการทดลอง</h2>
               <p className="muted">
                 {locale === "th"
-                  ? `EEG บันทึกตลอด Baseline ${shownDurations[0]} วินาที → Task → Rest ${shownDurations[2]} วินาที · เกมเปิดเองเมื่อเริ่ม Task`
-                  : `EEG records through a ${shownDurations[0]}-second baseline → task → ${shownDurations[2]}-second rest · the game opens at task start`}
+                  ? `บันทึกข้อมูลตลอด Baseline ${shownDurations[0]} วินาที → Task → Rest ${shownDurations[2]} วินาที · เกมเปิดเองเมื่อเริ่ม Task`
+                  : `Data records through a ${shownDurations[0]}-second baseline → task → ${shownDurations[2]}-second rest · the game opens at task start`}
               </p>
             </div>
             <span
@@ -1382,9 +1381,9 @@ export default function ResearchSession({
             >
               {ready
                 ? liveRailPercents.some((value) => value >= 1)
-                  ? "● EEG ครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์"
-                  : "● EEG ครบ 4 ช่อง"
-                : "○ รอ EEG ครบ 4 ช่อง"}
+                  ? "● สัญญาณครบ 4 ช่อง · ตรวจสัมผัสเซนเซอร์"
+                  : "● สัญญาณครบ 4 ช่อง"
+                : "○ รอสัญญาณครบ 4 ช่อง"}
             </span>
           </div>
           {ready && liveRailPercents.some((value) => value >= 1) && (
@@ -1465,7 +1464,7 @@ export default function ResearchSession({
             )}
             {hasFinished && !data?.rawDeleted && (
               <button type="button" onClick={() => exportCsv()} disabled={busy}>
-                ส่งออก EEG + markers (.csv)
+                ส่งออกข้อมูล + markers (.csv)
               </button>
             )}
             {hasFinished && !sequence && (
@@ -1511,7 +1510,6 @@ export default function ResearchSession({
                       label, timestamp: Date.now(), recordId: record.id, participant: record.participant, sessionId: record.sessionId,
                     }] });
                     setMarkerText("");
-                    setViewTick((n) => n + 1);
                   }
                 }}
               >
@@ -1536,7 +1534,7 @@ export default function ResearchSession({
                       data.channels[index] /
                       Math.max(
                         1,
-                        ((data.endedMs || Date.now()) - data.startedMs) / 1000,
+                        ((data.endedMs || viewTime) - data.startedMs) / 1000,
                       )
                     ).toFixed(1)}{" "}
                     Hz จริง · ขาด {data.missingPackets[index]} packets · ชนขอบ{" "}
@@ -1580,7 +1578,7 @@ export default function ResearchSession({
               (!studyConfig
                 ? "กำลังโหลดการตั้งค่าการทดลอง"
                 : storageReady
-                  ? "ข้อมูล EEG จะบันทึกในเบราว์เซอร์นี้ โปรดส่งออก CSV เพื่อสำรองข้อมูล"
+                  ? "ข้อมูลจะบันทึกในเบราว์เซอร์นี้ โปรดส่งออก CSV เพื่อสำรองข้อมูล"
                   : "กำลังตรวจสอบที่เก็บข้อมูลในเบราว์เซอร์")}
           </p>
         </div>
@@ -1695,8 +1693,8 @@ export default function ResearchSession({
                         onClick={() => pruneSaved(session)}
                       >
                         {locale === "th"
-                          ? "ลบ EEG ดิบ เก็บสรุป"
-                          : "Delete raw EEG, keep summary"}
+                          ? "ลบข้อมูลดิบ เก็บสรุป"
+                          : "Delete raw data, keep summary"}
                       </button>
                     )}
                     <button

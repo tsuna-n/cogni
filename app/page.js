@@ -41,6 +41,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export default function Home() {
   const [locale, setLocale] = useState("th");
   const [activeSection, setActiveSection] = useState("dashboard");
+  const [sequenceHost, setSequenceHost] = useState(null);
   const [sequenceActive, setSequenceActive] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -197,8 +198,8 @@ export default function Home() {
       ?.setAttribute(
         "content",
         locale === "th"
-          ? "พื้นที่ทดลองวิจัยด้วย Muse 2 EEG พร้อมลำดับ baseline, task, rest และส่งออกข้อมูล CSV"
-          : "Muse 2 EEG research workspace with baseline, task, rest, event markers, and CSV export.",
+          ? "พื้นที่สำหรับทำกิจกรรม แบบประเมิน และติดตามผล พร้อมส่งออกข้อมูล CSV"
+          : "A workspace for activities, assessments, progress tracking, and CSV export.",
       );
     localStorage.setItem("cogni_locale", locale);
     localizationRef.current?.refresh();
@@ -299,61 +300,6 @@ export default function Home() {
       setBusy(false);
     }
   };
-
-  useEffect(() => {
-    if (authed !== false) return;
-    const c = document.getElementById("authWave");
-    if (!c || !c.getContext) return;
-    const ctx = c.getContext("2d");
-    let raf = 0;
-    const layers = [
-      {
-        color: "rgba(52,138,250,.4)",
-        amp: 46,
-        speed: 0.9,
-        freq: 1.6,
-        width: 2,
-      },
-      {
-        color: "rgba(161,122,229,.3)",
-        amp: 30,
-        speed: 1.4,
-        freq: 2.4,
-        width: 1.5,
-      },
-      {
-        color: "rgba(40,187,150,.2)",
-        amp: 22,
-        speed: 0.6,
-        freq: 3.2,
-        width: 1,
-      },
-    ];
-    const draw = (t) => {
-      const w = c.width,
-        h = c.height;
-      ctx.clearRect(0, 0, w, h);
-      layers.forEach((L) => {
-        ctx.strokeStyle = L.color;
-        ctx.lineWidth = L.width;
-        ctx.beginPath();
-        for (let x = 0; x <= w; x += 4) {
-          const p = (x / w) * Math.PI * 2 * L.freq;
-          const y =
-            h / 2 +
-            Math.sin(p + (t / 1000) * L.speed) * L.amp +
-            Math.sin(p * 3.7 + (t / 700) * L.speed) * L.amp * 0.3 +
-            (Math.random() - 0.5) * 3;
-          if (x === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      });
-      raf = requestAnimationFrame(draw);
-    };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [authed]);
 
   useEffect(() => {
     const $ = (id) => document.getElementById(id);
@@ -490,7 +436,7 @@ export default function Home() {
     function startGame(n) {
       if (window.__studySequence && window.__studyPhase !== "task") {
         alertUser(
-          "ใช้ปุ่ม Next ตามลำดับเกมหลังบันทึก EEG ครบ / Use Next after the EEG recording finishes.",
+          "ใช้ปุ่ม Next ตามลำดับเกมหลังบันทึกข้อมูลครบ / Use Next after the data recording finishes.",
         );
         return;
       }
@@ -639,7 +585,7 @@ export default function Home() {
       const box = $("gamebox");
       if (box)
         box.textContent = event.detail?.restSeconds
-          ? `กิจกรรมสิ้นสุด · กำลังเก็บ EEG ต่ออีก ${event.detail.restSeconds} วินาที / Recording ${event.detail.restSeconds} more seconds`
+          ? `กิจกรรมสิ้นสุด · กำลังเก็บข้อมูลต่ออีก ${event.detail.restSeconds} วินาที / Recording ${event.detail.restSeconds} more seconds`
           : "กิจกรรมสิ้นสุด / Task ended";
     };
     const onResearchTaskStart = (event) => {
@@ -649,7 +595,7 @@ export default function Home() {
       startGame(selectedGame);
       const finishTaskBtn = $("finishTaskBtn");
       if (finishTaskBtn) {
-        finishTaskBtn.textContent = `Finish task · record EEG for ${event.detail.restSeconds} more seconds / จบกิจกรรม · เก็บ EEG ต่อ ${event.detail.restSeconds} วินาที`;
+        finishTaskBtn.textContent = `Finish task · record data for ${event.detail.restSeconds} more seconds / จบกิจกรรม · เก็บข้อมูลต่อ ${event.detail.restSeconds} วินาที`;
         finishTaskBtn.hidden = Boolean(event.detail.sequenceId);
       }
     };
@@ -668,7 +614,7 @@ export default function Home() {
         $("gtitle").textContent =
           `Game ${event.detail.gameId} / เกม ${event.detail.gameId}`;
         $("gamebox").textContent =
-          "กำลังบันทึก EEG ช่วงพักนิ่ง เกมจะเริ่มเมื่อครบ Baseline / Recording baseline EEG. The game starts when baseline is complete.";
+          "กำลังบันทึกข้อมูลช่วงพักนิ่ง เกมจะเริ่มเมื่อครบ Baseline / Recording baseline data. The game starts when baseline is complete.";
       }
     };
     window.addEventListener("research-sequence-state", onResearchSequenceState);
@@ -677,8 +623,8 @@ export default function Home() {
         $("gamebox").textContent =
           event.detail.status === "complete"
             ? event.detail.gameId === 3
-              ? "ทำครบทั้ง 3 เกมแล้ว ดูผลหรือส่งออก EEG แยกแต่ละเกมได้ / All 3 games are complete. Review results or export each game's EEG."
-              : "บันทึก EEG เกมนี้ครบแล้ว ใช้ปุ่ม Next ด้านบนเพื่อไปต่อ / EEG recording saved. Use Next above to continue."
+              ? "ทำครบทั้ง 3 เกมแล้ว ดูผลหรือส่งออกข้อมูลแยกแต่ละเกมได้ / All 3 games are complete. Review results or export each game's data."
+              : "บันทึกข้อมูลเกมนี้ครบแล้ว ใช้ปุ่ม Next ด้านบนเพื่อไปต่อ / Recording saved. Use Next above to continue."
             : "รอบนี้ไม่สมบูรณ์ เก็บข้อมูลบางส่วนแล้ว กรุณาลองเกมเดิมอีกครั้ง / Partial recording saved. Retry the same game.";
       }
       showSection(event.detail?.sequenceId ? "games" : "journey");
@@ -1067,16 +1013,16 @@ export default function Home() {
         : 0;
       let baselineCard;
       if (journey.eeg) {
-        baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><table><tr><th>Channel</th><th>Mean</th><th>SD</th><th>Range</th></tr>${journey.eeg.channels
+        baselineCard = `<div class="card" style="margin-top:14px"><h3>Baseline (Muse 2) / ข้อมูลช่วงก่อนกิจกรรม</h3><table><tr><th>Channel</th><th>Mean</th><th>SD</th><th>Range</th></tr>${journey.eeg.channels
           .map(
             (c) =>
               `<tr><td>${c.name}</td><td>${c.samples ? c.mean + " µV" : "—"}</td><td>${c.samples ? c.sd + " µV" : "—"}</td><td>${c.samples ? c.min + "–" + c.max + " µV" : "—"}</td></tr>`,
           )
           .join(
             "",
-          )}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")} · ${journey.eeg.packets} packets · Research signal-quality metrics, not a medical measurement.</p></div>`;
+          )}</table><p class="muted">Recorded ${new Date(journey.eeg.recordedAt).toLocaleString(localeRef.current === "th" ? "th-TH" : "en-US")} · ${journey.eeg.packets} packets · Signal-quality metrics, not a medical measurement.</p></div>`;
       } else {
-        baselineCard = `<div class="card" style="margin-top:14px"><h3>EEG Baseline (Muse 2) / คลื่นสมองช่วง Baseline</h3><p class="muted">ยังไม่ได้บันทึก Baseline — เชื่อมต่อ Muse 2 แล้วกด Start 30-sec Baseline ที่ส่วนบน / Baseline not recorded — connect Muse 2 and start the 30-second baseline above.</p></div>`;
+        baselineCard = `<div class="card" style="margin-top:14px"><h3>Baseline (Muse 2) / ข้อมูลช่วงก่อนกิจกรรม</h3><p class="muted">ยังไม่ได้บันทึก Baseline — เชื่อมต่อ Muse 2 แล้วกด Start 30-sec Baseline ที่ส่วนบน / Baseline not recorded — connect Muse 2 and start the 30-second baseline above.</p></div>`;
       }
       $("stepbox").innerHTML =
         `<h2>Assessment Summary / สรุปผลการประเมิน</h2><div class="grid"><div class="card metric"><small>Screening score</small><b>${journey.screen ? journey.screen.total + "/" + journey.screen.max : "—"}</b></div><div class="card metric"><small>Mean game accuracy</small><b>${avg}%</b></div><div class="card metric"><small>Completed games</small><b>${journey.games.length}/3</b></div><div class="card metric"><small>Status</small><b>Complete</b></div></div>${baselineCard}<div class="card" style="margin-top:14px"><h3>Game results</h3><table><tr><th>Game</th><th>Accuracy</th><th>Reaction time</th><th>Errors</th><th>RT variability</th></tr>${journey.games
@@ -1595,7 +1541,7 @@ export default function Home() {
               );
               setStage("eeg");
               setMuseStatus(
-                "Connected + EEG streaming / เชื่อมต่อและเริ่มรับ EEG แล้ว",
+                "Connected + Data streaming / เชื่อมต่อและเริ่มรับข้อมูลแล้ว",
               );
               getEl("baselineBtn").disabled = false;
             }
@@ -1608,7 +1554,7 @@ export default function Home() {
           window.dispatchEvent(
             new CustomEvent("muse-study-status", { detail: { ready: false } }),
           );
-          setMuseStatus("EEG stream error: " + (err?.message || err), true);
+          setMuseStatus("Data stream error: " + (err?.message || err), true);
           getEl("baselineBtn").disabled = true;
         },
       });
@@ -1640,7 +1586,7 @@ export default function Home() {
           setStage(stage);
           setMuseStatus(stage === "gatt"
             ? "2/4 เชื่อมต่อ Bluetooth แล้ว กำลังค้นหา Muse Service / Bluetooth connected; discovering Muse service"
-            : "3/4 พบ Muse Service แล้ว กำลังเปิดช่อง EEG / Muse service found; enabling EEG channels");
+            : "3/4 พบ Muse Service แล้ว กำลังเปิดช่องข้อมูล / Muse service found; enabling channels");
         } });
         if (!museEffectActive) {
           connectingClient.disconnect();
@@ -1651,7 +1597,7 @@ export default function Home() {
         } catch (e) {}
         device.addEventListener("gattserverdisconnected", onMuseDisconnected);
         setMuseStatus(
-          label + " connected. Starting EEG… / เชื่อมต่อแล้ว กำลังเริ่ม EEG",
+          label + " connected. Starting data… / เชื่อมต่อแล้ว กำลังเริ่มรับข้อมูล",
         );
 
         subscribeEeg();
@@ -1661,9 +1607,9 @@ export default function Home() {
           connectingClient.disconnect();
           return;
         }
-        if (!device.gatt.connected) throw Object.assign(new Error("Headset disconnected during EEG startup"), { museStage: "gatt" });
+        if (!device.gatt.connected) throw Object.assign(new Error("Headset disconnected during Data startup"), { museStage: "gatt" });
         if (!window.__museReady)
-          setMuseStatus("4/4 เริ่ม EEG แล้ว กำลังรอข้อมูล / EEG started; waiting for data");
+          setMuseStatus("4/4 เริ่มรับข้อมูลแล้ว กำลังรอข้อมูล / Data streaming started; waiting for data");
         museConnected = true;
         setMuseConnected(true, label);
         getEl("disconnectMuseBtn").disabled = false;
@@ -2077,33 +2023,27 @@ export default function Home() {
         className="auth-bg"
         style={{ display: authed === false ? "grid" : "none" }}
       >
-        <canvas
-          id="authWave"
-          width="1600"
-          height="420"
-          aria-hidden="true"
-        ></canvas>
         <div className="auth-layout">
           <aside className="auth-introduction" data-no-translate>
-            <span className="auth-eyebrow">COGNILOAD · EEG RESEARCH</span>
+            <span className="auth-eyebrow">COGNILOAD · ACTIVITY WORKSPACE</span>
             <h1>
-              {locale === "th" ? "งานวิจัยสัญญาณสมอง" : "EEG research."}
+              {locale === "th" ? "ทุกกิจกรรมของคุณ" : "Your activities."}
               <br />
               <span>
                 {locale === "th"
                   ? "บันทึกอย่างเป็นระบบ"
-                  : "Record. Study. Discover."}
+                  : "Record. Track. Review."}
               </span>
             </h1>
             <p>
               {locale === "th"
-                ? "พื้นที่สำหรับการทดลอง EEG ที่เชื่อมข้อมูลสัญญาณสมอง ภารกิจการรู้คิด และทุกการค้นพบของคุณเข้าด้วยกัน"
-                : "A thoughtful space to connect EEG recordings, cognitive tasks, and your next discovery."}
+                ? "พื้นที่สำหรับทำกิจกรรมและแบบประเมิน ติดตามความก้าวหน้า และทบทวนผลของคุณได้ในที่เดียว"
+                : "A space for activities and assessments, with your progress and results together in one place."}
             </p>
-            <div className="auth-eeg-visual" aria-hidden="true" />
+            <div className="auth-activity-visual" aria-hidden="true" />
             <div className="auth-feature-list">
               {[
-                ["pulse", "สัญญาณจริงจาก Muse", "Real Muse recordings"],
+                ["pulse", "ติดตามความก้าวหน้า", "Track your progress"],
                 ["game", "ภารกิจการรู้คิด", "Cognitive tasks"],
                 ["file", "สรุปและส่งออกข้อมูล", "Summaries & export"],
               ].map(([icon, th, en]) => (
@@ -2116,7 +2056,7 @@ export default function Home() {
           </aside>
           <div className="auth-inner">
             <div className="auth-logo">
-              <DashboardIcon name="brain" size={31} />
+              <DashboardIcon name="grid" size={31} />
             </div>
             <div className="brand" style={{ fontSize: "26px" }}>
               CogniLoad<span>-XAI</span>
@@ -2141,7 +2081,7 @@ export default function Home() {
                   ? "Sign in / เข้าสู่ระบบ"
                   : "Register / สมัครสมาชิก"}
               </h2>
-              <p className="muted">Research workspace / ระบบสำหรับผู้วิจัย</p>
+              <p className="muted">Activity workspace / พื้นที่สำหรับกิจกรรมของคุณ</p>
               <div className="auth-tabs">
                 <button
                   type="button"
@@ -2272,7 +2212,7 @@ export default function Home() {
               </div>
             </div>
             <p className="auth-foot">
-              📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึก EEG
+              📶 เชื่อมต่อ Muse 2 หรือ Muse S และบันทึกข้อมูล
               ได้ในหน้าการทดลองหลังเข้าสู่ระบบ
             </p>
           </div>
@@ -2332,7 +2272,7 @@ export default function Home() {
           </div>
           <div className="workspace-topbar-end" data-no-translate>
             <div className="workspace-live" id="studyLiveBadge">
-              <i /> Muse EEG Research
+              <i /> CogniLoad Activities
             </div>
             <button
               type="button"
@@ -2404,21 +2344,21 @@ export default function Home() {
           >
             <div className="workspace-brand">
               <span className="workspace-brand-mark">
-                <DashboardIcon name="brain" size={24} />
+                <DashboardIcon name="grid" size={24} />
               </span>
               <div>
                 <strong>
                   CogniLoad<span>-XAI</span>
                 </strong>
-                <small>EEG RESEARCH PLATFORM</small>
+                <small>ACTIVITY PLATFORM</small>
               </div>
             </div>
             <div className="workspace-nav-group">
-              {locale === "th" ? "พื้นที่การวิจัย" : "WORKSPACE"}
+              {locale === "th" ? "พื้นที่กิจกรรม" : "WORKSPACE"}
             </div>
             {[
               ["dashboard", "grid", "แดชบอร์ด", "Dashboard"],
-              ["journey", "flask", "ห้องทดลอง EEG", "EEG experiment"],
+              ["journey", "flask", "ห้องกิจกรรม", "Activity session"],
               ["games", "game", "ภารกิจการรู้คิด", "Cognitive tasks"],
               ["cogscreen", "book", "แบบคัดกรองเบื้องต้น", "Preliminary screening"],
               ["history", "clock", "ประวัติแบบประเมิน", "Assessment history"],
@@ -2491,14 +2431,14 @@ export default function Home() {
               </button>
             )}
             <div className="workspace-sidebar-bottom">
-              <div className="workspace-eeg-mark" aria-hidden="true">
+              <div className="workspace-activity-mark" aria-hidden="true">
                 <DashboardIcon name="pulse" size={24} />
-                <span>EEG RESEARCH</span>
+                <span>ACTIVITY WORKSPACE</span>
               </div>
               <strong>
                 {locale === "th"
-                  ? "พื้นที่วิจัยสัญญาณสมอง"
-                  : "EEG research workspace"}
+                  ? "พื้นที่สำหรับทุกกิจกรรม"
+                  : "Activity workspace"}
               </strong>
               <p>
                 {locale === "th"
@@ -2511,7 +2451,7 @@ export default function Home() {
             </div>
             <div className="workspace-sidebar-footer">
               <span>CogniLoad-XAI</span>
-              <small>RESEARCH WORKSPACE</small>
+              <small>ACTIVITY WORKSPACE</small>
             </div>
           </nav>
           <main>
@@ -2529,7 +2469,7 @@ export default function Home() {
               <WorkspacePageHeading
                 locale={locale}
                 icon="flask"
-                title={locale === "th" ? "ห้องทดลอง EEG" : "EEG experiment"}
+                title={locale === "th" ? "ห้องกิจกรรม" : "Activity session"}
                 description={
                   locale === "th"
                     ? "เตรียมรอบทดลอง เชื่อมต่อ Muse และบันทึกทุกช่วงของการค้นพบ"
@@ -2544,6 +2484,7 @@ export default function Home() {
                 accountEmail={accountEmail}
                 accountData={accountData}
                 initialSetup={accountForms.setup}
+                sequenceHost={sequenceHost}
                 isAdmin={isAdmin}
                 studyConfig={appConfig?.study}
                 configError={configError}
@@ -2596,7 +2537,7 @@ export default function Home() {
                 <div className="hero">
                   <div>
                     <h3 style={{ marginBottom: "6px" }}>
-                      03 · Muse EEG / ตรวจสัญญาณสด
+                      03 · Muse / ตรวจสัญญาณสด
                     </h3>
                     <p className="muted">
                       Web Bluetooth · TP9, AF7, AF8, TP10 · 256 Hz
@@ -2689,15 +2630,15 @@ export default function Home() {
                   </span>
                   <span
                     data-stage="eeg"
-                    data-label="EEG Receiving"
+                    data-label="Receiving data"
                     style={{ opacity: ".5" }}
                   >
-                    ○ EEG Receiving
+                    ○ Receiving data
                   </span>
                 </div>
                 <div className="muted" style={{ marginTop: "8px" }}>
                   เปิด Muse → กด Connect Muse → เลือก <b>Muse หรือ MuseS</b>{" "}
-                  ในหน้าต่าง Bluetooth → รอให้สถานะแสดง “EEG ครบ 4 ช่อง”
+                  ในหน้าต่าง Bluetooth → รอให้สถานะแสดง “สัญญาณครบ 4 ช่อง”
                   ก่อนเริ่มบันทึก
                 </div>
 
@@ -2819,7 +2760,7 @@ export default function Home() {
                     }}
                   ></div>
                   <div className="muted" style={{ marginTop: "10px" }}>
-                    ค่าด้านล่างเป็นสรุปคุณภาพ/สถิติของสัญญาณ EEG ที่บันทึก
+                    ค่าด้านล่างเป็นสรุปคุณภาพ/สถิติของสัญญาณจากอุปกรณ์ที่บันทึก
                     ไม่ใช่ผลวินิจฉัยทางการแพทย์
                   </div>
                 </div>
@@ -2855,6 +2796,7 @@ export default function Home() {
                   }
                 />
                 <AdminPanel
+                  key={accountEmail}
                   locale={locale}
                   enabled={authed === true && isAdmin}
                 />
@@ -3034,16 +2976,16 @@ export default function Home() {
               <WorkspacePageHeading
                 locale={locale}
                 icon="pulse"
-                title={locale === "th" ? "นำเข้าข้อมูล EEG" : "EEG acquisition"}
+                title={locale === "th" ? "นำเข้าข้อมูล" : "Data acquisition"}
                 description={
                   locale === "th"
                     ? "นำเข้าไฟล์ CSV หรือเปิดข้อมูลตัวอย่างเพื่อสำรวจสัญญาณ"
-                    : "Import a CSV or explore sample EEG signals."
+                    : "Import a CSV or explore sample device signals."
                 }
               />
               <div className="card">
                 <p className="muted">
-                  Import EEG data for prototype analysis. CSV demo parsing is
+                  Import device data for prototype analysis. CSV demo parsing is
                   performed locally in your browser.
                 </p>
                 <div className="controls">
@@ -3055,7 +2997,7 @@ export default function Home() {
                     className="secondary"
                     onClick={() => call("simulate")}
                   >
-                    Use Demo EEG
+                    Use Demo Data
                   </button>
                 </div>
                 <div id="fileinfo" className="muted">
@@ -3070,7 +3012,7 @@ export default function Home() {
                 locale={locale}
                 icon="flask"
                 title={
-                  locale === "th" ? "เตรียมสัญญาณ EEG" : "EEG preprocessing"
+                  locale === "th" ? "เตรียมสัญญาณจากอุปกรณ์" : "Data preprocessing"
                 }
                 description={
                   locale === "th"
@@ -3140,8 +3082,8 @@ export default function Home() {
                 icon="pulse"
                 title={
                   locale === "th"
-                    ? "คุณลักษณะสัญญาณ EEG"
-                    : "EEG feature extraction"
+                    ? "คุณลักษณะสัญญาณจากอุปกรณ์"
+                    : "Feature extraction"
                 }
                 description={
                   locale === "th"
@@ -3155,7 +3097,7 @@ export default function Home() {
                   className="workspace-table-scroll"
                   tabIndex={0}
                   role="region"
-                  aria-label="EEG features"
+                  aria-label="Recorded features"
                 >
                   <table>
                     <thead>
@@ -3322,7 +3264,7 @@ export default function Home() {
               <div className="card" style={{ marginTop: "14px" }}>
                 <h3>Research data linkage / การเชื่อมโยงข้อมูลวิจัย</h3>
                 <p className="muted">
-                  Store the screening score separately from EEG/game biomarkers,
+                  Store the screening score separately from device and game metrics,
                   then test associations with workload features. Do not use the
                   game score as a diagnosis of Alzheimer’s disease.
                 </p>
@@ -3348,14 +3290,14 @@ export default function Home() {
                   locale === "th" ? "3 ภารกิจการทดลอง" : "3 experimental tasks"
                 }
               />
-              <div id="gameSequenceControls" />
+              <div id="gameSequenceControls" ref={setSequenceHost} />
               {!sequenceActive && (
                 <div className="card task-sequence-intro" data-no-translate>
                   <div className="task-sequence-intro-copy">
                     <span className="study-kicker">
                       {locale === "th"
-                        ? "ชุดทดลองพร้อมบันทึก EEG"
-                        : "EEG RECORDING SEQUENCE"}
+                        ? "ชุดทดลองพร้อมบันทึกข้อมูล"
+                        : "ACTIVITY RECORDING SEQUENCE"}
                     </span>
                     <h2>
                       {locale === "th"
@@ -3380,7 +3322,7 @@ export default function Home() {
                 </div>
               )}
               <p className="muted">
-                หากกำลังบันทึก EEG ระบบจะใส่ marker
+                หากกำลังบันทึกข้อมูลระบบจะใส่ marker
                 อัตโนมัติเมื่อแสดงสิ่งเร้าและเมื่อผู้เข้าร่วมตอบแต่ละครั้ง
                 ตรวจเวลาของช่วงทดลองได้ที่แถบด้านบน
               </p>
@@ -3394,8 +3336,8 @@ export default function Home() {
                 <summary data-no-translate>
                   <DashboardIcon name="game" size={18} />
                   {locale === "th"
-                    ? "ฝึกเกมก่อนเริ่ม · ไม่บันทึก EEG"
-                    : "Practice before starting · No EEG recording"}
+                    ? "ฝึกเกมก่อนเริ่ม · ไม่บันทึกข้อมูล"
+                    : "Practice before starting · No data recording"}
                 </summary>
                 <div
                   className="grid task-selection-grid"
@@ -3473,7 +3415,7 @@ export default function Home() {
                       className="secondary"
                       hidden
                     >
-                      จบกิจกรรม · เก็บ EEG ต่อ
+                      จบกิจกรรม · เก็บข้อมูลต่อ
                     </button>
                   </div>
                 </div>
@@ -3500,7 +3442,7 @@ export default function Home() {
                     </tbody>
                   </table>
                   <p className="muted">
-                    EEG event markers can later be synchronized to stimulus
+                    Event markers can later be synchronized to stimulus
                     onset and responses.
                   </p>
                 </div>

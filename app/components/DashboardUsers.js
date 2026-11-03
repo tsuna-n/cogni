@@ -45,51 +45,56 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
   const [creating, setCreating] = useState(false);
   const requestId = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(() => {
     const id = ++requestId.current;
-    setLoading(true);
-    try {
-      const results = await Promise.all(["/api/dashboard/users", "/api/research/summaries"].map(async (url) => {
+    return Promise.all(["/api/dashboard/users", "/api/research/summaries"].map(async (url) => {
         const response = await fetch(url, { cache: "no-store" });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         return data;
-      }));
+      })).then((results) => {
       if (id !== requestId.current) return;
       setUsers(results[0].users);
       setRecords(results[1].records);
       setUpdatedAt(new Date());
       setError("");
       return results[0].users;
-    } catch (cause) {
+    }).catch((cause) => {
       if (id !== requestId.current) return;
       if (["unauthorized", "forbidden"].includes(cause.message)) {
         setUsers([]); setRecords([]); setDraft(null); setSelectedEmail(""); setDirty(false);
         setCreating(false);
       }
       setError(cause.message);
-    } finally {
+    }).finally(() => {
       if (id === requestId.current) setLoading(false);
-    }
+    });
   }, []);
 
   useEffect(() => {
     if (!enabled) return;
+    const requests = requestId;
     load();
-    window.addEventListener("research-dashboard-opened", load);
-    window.addEventListener("research-session-finished", load);
-    window.addEventListener("research-summaries-synced", load);
-    window.addEventListener("focus", load);
+    const onRefresh = () => { setLoading(true); load(); };
+    window.addEventListener("research-dashboard-opened", onRefresh);
+    window.addEventListener("research-session-finished", onRefresh);
+    window.addEventListener("research-summaries-synced", onRefresh);
+    window.addEventListener("focus", onRefresh);
     return () => {
-      ++requestId.current;
-      window.removeEventListener("research-dashboard-opened", load);
-      window.removeEventListener("research-session-finished", load);
-      window.removeEventListener("research-summaries-synced", load);
-      window.removeEventListener("focus", load);
+      ++requests.current;
+      window.removeEventListener("research-dashboard-opened", onRefresh);
+      window.removeEventListener("research-session-finished", onRefresh);
+      window.removeEventListener("research-summaries-synced", onRefresh);
+      window.removeEventListener("focus", onRefresh);
     };
   }, [enabled, load]);
 
-  useEffect(() => { setPage(0); }, [search, query, overviewRole, overviewGroup]);
+  const filters = JSON.stringify([search, query, overviewRole, overviewGroup]);
+  const [previousFilters, setPreviousFilters] = useState(filters);
+  if (filters !== previousFilters) {
+    setPreviousFilters(filters);
+    setPage(0);
+  }
   useEffect(() => {
     if (!enabled || !dirty) return;
     const warn = (event) => { event.preventDefault(); event.returnValue = ""; };
@@ -125,6 +130,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
   };
   const reload = async () => {
     if (dirty && !window.confirm(t("โหลดข้อมูลล่าสุดและยกเลิกข้อมูลที่ยังไม่บันทึกหรือไม่?", "Reload the latest data and discard unsaved changes?"))) return;
+    setLoading(true);
     const latest = await load();
     if (latest) {
       const user = latest.find((item) => item.email === selectedEmail);
@@ -168,7 +174,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
     { id: "overview", icon: "grid", label: t("ภาพรวม", "Overview"), description: t("ติดตามข้อมูลผู้เข้าร่วม กลุ่มทดลอง และผลประเมิน", "Track participant profiles, study groups, and assessments.") },
     { id: "users", icon: "users", label: t("ผู้ใช้", "Users"), description: t("ค้นหาและจัดการข้อมูลผู้เข้าร่วมทีละบัญชี", "Find an account and manage its participant details.") },
     { id: "summaries", icon: "file", label: t("ผลการทดลอง", "Study results"), description: t("ทบทวน เปรียบเทียบ และส่งออกผลสรุปที่ซิงก์แล้ว", "Review, compare, and export synced session summaries.") },
-    { id: "personal", icon: "pulse", label: t("ข้อมูลในเครื่อง", "Local recordings"), description: t("รอบ EEG และผลประเมินของคุณที่เก็บในเบราว์เซอร์นี้", "Your EEG recordings and assessments stored in this browser.") },
+    { id: "personal", icon: "pulse", label: t("ข้อมูลในเครื่อง", "Local recordings"), description: t("รอบกิจกรรมและผลประเมินของคุณที่เก็บในเบราว์เซอร์นี้", "Your data recordings and assessments stored in this browser.") },
   ];
   const currentTab = tabs.find((tab) => tab.id === view) || tabs[0];
   const roleLabel = (role) => role === "admin" ? t("แอดมิน", "Administrator") : role === "researcher" ? t("นักวิจัย", "Researcher") : t("ผู้ใช้ทั่วไป", "User");
@@ -209,7 +215,7 @@ export default function DashboardUsers({ locale = "th", enabled = false, account
   };
   return <div className="dashboard-users dashboard-production" data-no-translate aria-labelledby="dashboard-users-title">
     <div className="dashboard-workspace-heading">
-      <div><div className="dash-breadcrumb">{t("พื้นที่วิจัย", "Research workspace")} <span>/</span> {t("แดชบอร์ด", "Dashboard")}</div><h1 id="dashboard-users-title">{t("แดชบอร์ด", "Dashboard")}</h1><p>{currentTab.description}</p></div>
+      <div><div className="dash-breadcrumb">{t("พื้นที่กิจกรรม", "Activity workspace")} <span>/</span> {t("แดชบอร์ด", "Dashboard")}</div><h1 id="dashboard-users-title">{t("แดชบอร์ด", "Dashboard")}</h1><p>{currentTab.description}</p></div>
       <div className="dashboard-workspace-actions"><small>{loading ? t("กำลังอัปเดต…", "Updating…") : updatedAt ? `${t("ล่าสุด", "Updated")} ${updatedAt.toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })}` : ""}</small>{accountRole === "admin" && <button type="button" className="dash-button" onClick={startCreating} disabled={saving || creating}>{t("เพิ่มผู้ใช้", "Add user")}</button>}<button type="button" className="dash-button dash-outline" onClick={reload} disabled={loading || saving}><Icon name="refresh" size={16} />{t("รีเฟรช", "Refresh")}</button></div>
     </div>
     <div className="dashboard-view-tabs" role="tablist" aria-label={t("มุมมองแดชบอร์ด", "Dashboard views")}>{tabs.map((tab, index) => <button key={tab.id} type="button" role="tab" id={`dashboard-tab-${tab.id}`} aria-selected={view === tab.id} aria-controls={`dashboard-panel-${tab.id}`} tabIndex={view === tab.id ? 0 : -1} onKeyDown={(event) => navigateTab(event, index)} onClick={() => onViewChange(tab.id)}><Icon name={tab.icon} size={18} /><span>{tab.label}</span>{tab.id === "users" && <small>{users.length}</small>}</button>)}</div>

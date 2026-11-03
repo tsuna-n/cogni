@@ -27,8 +27,8 @@ export default function GameSequenceControls({
       className="game-sequence-controls card"
       data-no-translate
       aria-label={t(
-        "ลำดับเกมและการบันทึก EEG",
-        "Game sequence & EEG recording",
+        "ลำดับเกมและการบันทึกข้อมูล",
+        "Game sequence & data recording",
       )}
     >
       <div className="game-sequence-heading">
@@ -36,7 +36,7 @@ export default function GameSequenceControls({
           {t("ชุดการทดลอง · 3 เกมตามลำดับ", "RECORDING SEQUENCE · 3 GAMES")}
         </span>
         <span className="pill">
-          {t("EEG แยกแต่ละเกม", "Separate EEG per game")}
+          {t("ข้อมูลแยกแต่ละเกม", "Separate data per game")}
         </span>
       </div>
       <ol className="game-sequence-steps">
@@ -63,7 +63,7 @@ export default function GameSequenceControls({
               <strong>{localizeText(game.name, locale)}</strong>
               <small>
                 {complete.has(game.id)
-                  ? t("บันทึก EEG ครบแล้ว", "EEG recording saved")
+                  ? t("บันทึกข้อมูลครบแล้ว", "Recording saved")
                   : game.id === gameId
                     ? t("เกมปัจจุบัน", "Current game")
                     : t("รอเกมก่อนหน้า", "After previous game")}
@@ -74,11 +74,11 @@ export default function GameSequenceControls({
       </ol>
       <div className="game-sequence-status" role="status">
         {recording
-          ? `${t("กำลังบันทึก EEG", "Recording EEG")} · ${phase} · ${remaining} ${t("วินาที", "seconds")}`
+          ? `${t("กำลังบันทึกข้อมูล", "Recording data")} · ${phase} · ${remaining} ${t("วินาที", "seconds")}`
           : action?.type === "finished"
             ? t(
-                "บันทึก EEG ครบทั้ง 3 เกมแล้ว ส่งออกแต่ละเกมได้จากรายการรอบทดลอง",
-                "All 3 EEG recordings are saved. Export each game from your recordings.",
+                "บันทึกข้อมูลครบทั้ง 3 เกมแล้ว ส่งออกแต่ละเกมได้จากรายการรอบทดลอง",
+                "All 3 data recordings are saved. Export each game from your recordings.",
               )
             : action?.type === "next"
               ? t(
@@ -107,7 +107,7 @@ export default function GameSequenceControls({
                   "Next · จบเกมและบันทึกช่วงพัก",
                   "Next · Finish game & record rest",
                 )
-              : t("รอบันทึก EEG ให้ครบช่วง", "Waiting for EEG phase to finish")}
+              : t("รอบันทึกข้อมูลให้ครบช่วง", "Waiting for data phase to finish")}
             <Icon name="arrow" size={15} />
           </button>
         )}
@@ -150,7 +150,7 @@ export default function GameSequenceControls({
             disabled={busy}
           >
             <Icon name="download" size={15} />
-            {t(`ส่งออก EEG เกม ${gameId}`, `Export game ${gameId} EEG`)}
+            {t(`ส่งออกข้อมูลเกม ${gameId}`, `Export game ${gameId} data`)}
           </button>
         )}
         {recording && (
