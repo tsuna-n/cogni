@@ -149,6 +149,12 @@ gh api repos/tsuna-n/cogni/commits/main/status --jq '{state,statuses:[.statuses[
 
 ถ้ามี push หลายคนใช้ SHA เป้าหมายแทน main รอ Vercel success แล้วเปิด deployment/domain/environment ถูกอันตรวจหน้าและ API หาก pending รอรายการเดิม หาก fail อ่าน logs ของ deployment นั้น
 
+### ผลตรวจ dependency ก่อนปล่อย (2026-11-03)
+
+อัปเดต Next.js และ eslint-config-next เป็น 16.4.4 พร้อม sharp 0.35.5, source-map-js 1.2.2 และ zod 4.6.7 ใน lockfiles ตาม [ประกาศช่องโหว่ Next.js](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j) และ [sharp](https://github.com/advisories/GHSA-wq5f-xc86-pv6w) ตรวจ production dependencies ด้วย `npm audit --omit=dev` แล้วไม่พบช่องโหว่ และทั้งสอง lockfiles ไม่มี critical/high ค้างอยู่
+
+ยังเหลือประกาศ moderate ของ minimatch ในเครื่องมือ lint ฝั่ง development (npm นับรวมแพ็กเก็ตที่พึ่งพาเป็น 16 รายการ; pnpm รายงาน 1 ประกาศ) ไม่เปิดรับ glob จากผู้ใช้เว็บ และไม่ถูกใช้งานใน production runtime จึงคงเวอร์ชันที่เข้ากับ ESLint ปัจจุบันไว้ แทนการใช้ forced fix ที่เสนอให้ลดรุ่น ESLint จนตรวจโค้ดชุดนี้ไม่ได้ ตรวจซ้ำเมื่อ upstream ออกรุ่นแก้ หรือภายใน 2026-11-17
+
 ## 9. ย้าย JSON เข้า Neon
 
 Script นำเข้า users, server summaries, saved settings ไม่รวม IndexedDB/localStorage/CSV ต้องมีไฟล์ local จริงและ backup ก่อน apply
