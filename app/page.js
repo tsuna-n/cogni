@@ -2455,10 +2455,10 @@ export default function Home() {
             </div>
           </nav>
           <main>
-            {authed === true && (
+            {authed === true && formSaveStatus === "error" && (
               <div className="notice" role="status" data-no-translate>
-                {formSaveStatus === "error" ? (locale === "th" ? "บันทึกข้อมูลไม่สำเร็จ ข้อมูลที่แก้ไขยังรอบันทึก" : "Saving failed. Your changes are pending.") : formSaveStatus === "pending" ? (locale === "th" ? "กำลังบันทึกข้อมูล…" : "Saving changes…") : (locale === "th" ? "ข้อมูลแบบฟอร์มบันทึกแล้ว" : "Form changes saved")}
-                {formSaveStatus === "error" && <button type="button" onClick={() => flushForms().catch(() => {})}>{locale === "th" ? "ลองบันทึกอีกครั้ง" : "Retry save"}</button>}
+                {locale === "th" ? "บันทึกข้อมูลไม่สำเร็จ ข้อมูลที่แก้ไขยังรอบันทึก" : "Saving failed. Your changes are pending."}
+                <button type="button" onClick={() => flushForms().catch(() => {})}>{locale === "th" ? "ลองบันทึกอีกครั้ง" : "Retry save"}</button>
               </div>
             )}
             {/* ---------- Journey ---------- */}

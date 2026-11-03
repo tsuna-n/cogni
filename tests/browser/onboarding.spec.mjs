@@ -70,7 +70,7 @@ test('first login cannot skip screening; failed confirmation stays locked; saved
   await expect(screen.getByRole('heading', { name: 'ผลการคัดกรองเบื้องต้น', exact: true })).toBeVisible();
   await screen.getByRole('button', { name: 'กลับหน้าหลัก', exact: true }).click();
   await expect(page.locator('#dashboard')).toBeVisible();
-  await expect(page.locator('main > [role=status]')).toContainText('ข้อมูลแบบฟอร์มบันทึกแล้ว');
+  await expect(page.locator('main > [role=status]')).toHaveCount(0);
   await page.reload();
   await expect(page.locator('#dashboard')).toBeVisible();
   expect(Object.values(state.forms().screeningHistory)[0].answers).toHaveLength(8);
@@ -96,6 +96,7 @@ test('setup and legacy inputs autosave, restore and stay isolated between accoun
   await page.getByRole('button', { name: 'ลองบันทึกอีกครั้ง', exact: true }).click();
   await expect.poll(() => state.forms().setup?.sessionId).toBe('S09');
   await expect.poll(() => state.forms().setup?.taskSeconds).toBe('95');
+  await expect(page.locator('main > [role=status]')).toHaveCount(0);
   await page.evaluate(() => window.showSection('participant'));
   await page.locator('#participant input[type=number]').first().fill('68');
   await expect.poll(() => state.forms().workspace?.fields?.['participant:age']).toBe('68');
@@ -124,7 +125,7 @@ test('setup and legacy inputs autosave, restore and stay isolated between accoun
   await page.locator('#cogscreen .study-legacy > summary').click();
   await expect(page.locator('#mcscore')).toHaveValue('3');
   await expect(page.locator('#mcdate')).toHaveValue('2026-10-03');
-  await expect(page.locator('main > [role=status]')).toContainText('ข้อมูลแบบฟอร์มบันทึกแล้ว');
+  await expect(page.locator('main > [role=status]')).toHaveCount(0);
   state.switchAccount();
   await page.reload();
   await expect(page.locator('#cogscreen')).toBeVisible();
